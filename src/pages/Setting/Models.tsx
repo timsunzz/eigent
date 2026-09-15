@@ -23,6 +23,7 @@ import {
 	proxyFetchDelete,
 	fetchPost,
 } from "@/api/http";
+import { isProviderConfigured } from "@/pages/Setting/components/utils";
 import {
 	Select,
 	SelectTrigger,
@@ -118,7 +119,7 @@ export default function SettingModels() {
 								provider_id: found.id,
 								apiKey: found.api_key || "",
 								apiHost: found.endpoint_url || "",
-								is_valid: !!found?.is_valid,
+								is_valid: isProviderConfigured(found),
 								prefer: found.prefer ?? false,
 								model_type: found.model_type ?? "",
 								externalConfig: fi.externalConfig
@@ -141,7 +142,6 @@ export default function SettingModels() {
 				const local = providerList.find(
 					(p: any) => LOCAL_PROVIDER_NAMES.includes(p.provider_name)
 				);
-				console.log(123123, local);
 				if (local) {
 					setLocalEndpoint(local.endpoint_url || "");
 					setLocalPlatform(
@@ -150,7 +150,7 @@ export default function SettingModels() {
 						"ollama"
 					);
 					setLocalType(local.encrypted_config?.model_type || "llama3.2");
-					setLocalEnabled(local.is_valid ?? true);
+					setLocalEnabled(isProviderConfigured(local) || (local.is_valid ?? true));
 					setLocalPrefer(local.prefer ?? false);
 					setLocalProviderId(local.id);
 				}
@@ -262,7 +262,8 @@ export default function SettingModels() {
 			provider_name: item.id,
 			api_key: form[idx].apiKey,
 			endpoint_url: form[idx].apiHost,
-			is_valid: form[idx].is_valid,
+			is_valid: true,
+			is_vaild: 2,
 			model_type: form[idx].model_type,
 		};
 		if (externalConfig) {
@@ -272,10 +273,13 @@ export default function SettingModels() {
 			});
 		}
 		try {
+			let savedProviderId = provider_id;
 			if (provider_id) {
-				await proxyFetchPut(`/api/provider/${provider_id}`, data);
+				const updated = await proxyFetchPut(`/api/provider/${provider_id}`, data);
+				savedProviderId = updated?.id ?? provider_id;
 			} else {
-				await proxyFetchPost("/api/provider", data);
+				const created = await proxyFetchPost("/api/provider", data);
+				savedProviderId = created?.id;
 			}
 			// add: refresh provider list after saving, update form and switch editable status
 			const res = await proxyFetchGet("/api/providers");
@@ -292,8 +296,9 @@ export default function SettingModels() {
 							provider_id: found.id,
 							apiKey: found.api_key || "",
 							apiHost: found.endpoint_url || "",
-							is_valid: !!found.is_valid,
+							is_valid: isProviderConfigured(found),
 							prefer: found.prefer ?? false,
+							model_type: found.model_type ?? fi.model_type,
 							externalConfig: fi.externalConfig
 								? fi.externalConfig.map((ec) => {
 									if (
@@ -310,7 +315,9 @@ export default function SettingModels() {
 					return fi;
 				})
 			);
-			handleSwitch(idx, true);
+			if (savedProviderId) {
+				await handleSwitch(idx, true, savedProviderId);
+			}
 		} finally {
 			setLoading(null);
 		}
@@ -416,13 +423,18 @@ export default function SettingModels() {
 				api_key: "not-required",
 				endpoint_url: localEndpoint, // Save base URL without specific endpoints
 				is_valid: true,
+				is_vaild: 2,
 				model_type: localType,
 				encrypted_config: {
 					model_platform: localPlatform,
 					model_type: localType,
 				},
 			};
-			await proxyFetchPost("/api/provider", data);
+			if (localProviderId !== undefined) {
+				await proxyFetchPut(`/api/provider/${localProviderId}`, data);
+			} else {
+				await proxyFetchPost("/api/provider", data);
+			}
 			setLocalError(null);
 			setLocalInputError(false);
 			// add: refresh provider list after saving, update localProviderId and localPrefer
@@ -467,7 +479,7 @@ export default function SettingModels() {
 		}
 	}, [localEnabled]);
 
-	const handleSwitch = async (idx: number, checked: boolean) => {
+	const handleSwitch = async (idx: number, checked: boolean, providerId?: number) => {
 		if (!checked) {
 			setActiveModelIdx(null);
 			setLocalEnabled(true);
@@ -483,15 +495,21 @@ export default function SettingModels() {
 				closeButton: true,
 			});
 		}
+		const targetProviderId = providerId ?? form[idx].provider_id;
+		if (targetProviderId === undefined) return;
 		try {
 			await proxyFetchPost("/api/provider/prefer", {
-				provider_id: form[idx].provider_id,
+				provider_id: targetProviderId,
 			});
 			setModelType("custom");
 			setActiveModelIdx(idx);
 			setLocalEnabled(false);
 			setCloudPrefer(false);
-			setForm((f) => f.map((fi, i) => ({ ...fi, prefer: i === idx }))); // Only one prefer allowed
+			setForm((f) => f.map((fi, i) => ({
+				...fi,
+				prefer: i === idx,
+				provider_id: i === idx ? targetProviderId : fi.provider_id,
+			})));
 			setLocalPrefer(false);
 		} catch (e) {
 			// Optional: add error message

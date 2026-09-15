@@ -1,51 +1,40 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 import { resources } from "./locales";
-import { getAuthStore } from "@/store/authStore";
+import { getAuthStore, useAuthStore } from "@/store/authStore";
+import { LocaleEnum, resolveLanguage } from "./resolveLanguage";
 
-export enum LocaleEnum {
-  SimplifiedChinese = "zh-Hans",
-  TraditionalChinese = "zh-Hant",
-  English = "en-US",
-  German = "de",
-  Korean = "ko",
-  Japanese = "ja",
-  French = "fr",
-  Russian = "ru",
-  Italian = "it",
-  Arabic = "ar",
-  Spanish = "es",
+export { LocaleEnum, resolveLanguage } from "./resolveLanguage";
+
+function applyLanguageFromStore() {
+  const resolved = resolveLanguage(getAuthStore().language);
+  if (i18n.language !== resolved) {
+    void i18n.changeLanguage(resolved);
+  }
 }
-
-const { language } = getAuthStore();
-
-const savedLanguage = language?.toLowerCase();
-const systemLanguage = navigator.language.toLowerCase();
-const availableLanguages = Object.values(LocaleEnum);
-
-let initialLanguage: string;
-
-if (savedLanguage && availableLanguages.includes(savedLanguage as LocaleEnum)) {
-  initialLanguage = savedLanguage;
-} else {
-  const matched = availableLanguages.find(lang => systemLanguage.startsWith(lang));
-  initialLanguage = matched || LocaleEnum.English;
-}
-
 
 i18n.use(initReactI18next).init({
   resources,
   fallbackLng: LocaleEnum.English,
-  lng: initialLanguage,
+  lng: resolveLanguage(getAuthStore().language),
   interpolation: {
     escapeValue: false,
   },
 });
 
-export const switchLanguage = (lang: LocaleEnum) => {
-  console.log("switchLanguage", lang);
-  i18n.changeLanguage(lang);
+const persistApi = (useAuthStore as { persist?: { onFinishHydration: (cb: () => void) => void; hasHydrated: () => boolean } }).persist;
+if (persistApi) {
+  persistApi.onFinishHydration(() => {
+    applyLanguageFromStore();
+  });
+  if (persistApi.hasHydrated()) {
+    applyLanguageFromStore();
+  }
+}
+
+export const switchLanguage = (lang: LocaleEnum | "system" | string) => {
   getAuthStore().setLanguage(lang);
+  void i18n.changeLanguage(resolveLanguage(lang));
 };
 
 export default i18n;

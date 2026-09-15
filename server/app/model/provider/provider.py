@@ -1,6 +1,6 @@
 from enum import IntEnum
-from typing import Optional
-from pydantic import BaseModel
+from typing import Any, Optional
+from pydantic import BaseModel, computed_field, model_validator
 from sqlalchemy import Boolean, Column, SmallInteger, String
 from sqlalchemy.orm import Mapped
 from sqlmodel import Field, JSON
@@ -38,6 +38,21 @@ class ProviderIn(BaseModel):
     is_vaild: VaildStatus = VaildStatus.not_valid
     prefer: bool = False
 
+    @model_validator(mode="before")
+    @classmethod
+    def accept_is_valid_alias(cls, data: Any):
+        if not isinstance(data, dict):
+            return data
+        if "is_vaild" not in data and "is_valid" in data:
+            raw = data.get("is_valid")
+            if isinstance(raw, bool):
+                data["is_vaild"] = VaildStatus.is_valid if raw else VaildStatus.not_valid
+            elif raw in (1, 2, "1", "2"):
+                data["is_vaild"] = int(raw)
+            elif raw in ("is_valid", "not_valid"):
+                data["is_vaild"] = raw
+        return data
+
 
 class ProviderPreferIn(BaseModel):
     provider_id: int
@@ -48,3 +63,8 @@ class ProviderOut(ProviderIn):
     user_id: int
     prefer: bool
     model_type: Optional[str] = None
+
+    @computed_field
+    @property
+    def is_valid(self) -> bool:
+        return self.is_vaild == VaildStatus.is_valid

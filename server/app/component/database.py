@@ -4,14 +4,23 @@ from utils import traceroot_wrapper as traceroot
 
 logger = traceroot.get_logger("database")
 
+
+def normalize_database_url(url: str) -> str:
+    if url.startswith("postgres://"):
+        return "postgresql://" + url[len("postgres://") :]
+    return url
+
+
+database_url = normalize_database_url(env_or_fail("database_url"))
+
 logger.info("Initializing database engine", extra={
-    "database_url_prefix": env_or_fail("database_url")[:20] + "...",
+    "database_url_prefix": database_url[:20] + "...",
     "debug_mode": env("debug") == "on",
     "pool_size": 36
 })
 
 engine = create_engine(
-    env_or_fail("database_url"),
+    database_url,
     echo=True if env("debug") == "on" else False,
     pool_size=36,
 )

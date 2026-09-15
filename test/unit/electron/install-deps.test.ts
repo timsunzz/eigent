@@ -30,7 +30,8 @@ vi.mock('../../../electron/main/init', () => ({
   })
 }))
 vi.mock('../../../electron/main/utils/safeWebContentsSend', () => ({
-  safeMainWindowSend: vi.fn().mockReturnValue(true)
+  safeMainWindowSend: vi.fn().mockReturnValue(true),
+  canSendToWindow: vi.fn().mockReturnValue(true),
 }))
 
 // Import the module under test after mocking

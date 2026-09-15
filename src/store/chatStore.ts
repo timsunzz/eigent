@@ -1765,7 +1765,8 @@ const chatStore = (initial?: Partial<ChatStore>) => createStore<ChatStore>()(
 							let taskAssigning = [...tasks[currentTaskId].taskAssigning]
 
 							const assigneeAgentIndex = taskAssigning!.findIndex((agent: Agent) => agent.tasks.find((task: TaskInfo) => task.id === agentMessages.data.process_task_id));
-							const task = taskAssigning[assigneeAgentIndex].tasks.find((task: TaskInfo) => task.id === agentMessages.data.process_task_id);
+							const assigneeAgent = assigneeAgentIndex !== -1 ? taskAssigning[assigneeAgentIndex] : undefined;
+							const task = assigneeAgent?.tasks.find((task: TaskInfo) => task.id === agentMessages.data.process_task_id);
 							const toolkit = {
 								toolkitId: generateUniqueId(),
 								toolkitName: 'notice',

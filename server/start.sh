@@ -1,16 +1,37 @@
 #!/bin/sh
+set -e
 
-# wait for database to be ready
-echo "Waiting for database to be ready..."
-while ! nc -z postgres 5432; do
-  sleep 1
-done
-echo "Database is ready!"
+# Railway and most hosts inject DATABASE_URL; the app reads database_url.
+if [ -z "${database_url:-}" ] && [ -n "${DATABASE_URL:-}" ]; then
+  export database_url="$DATABASE_URL"
+fi
 
-# run database migrations
+# SQLAlchemy 2 requires the postgresql:// scheme.
+case "${database_url:-}" in
+  postgres://*)
+    export database_url="postgresql://${database_url#postgres://}"
+    ;;
+esac
+
+wait_for_host() {
+  host="$1"
+  port="${2:-5432}"
+  echo "Waiting for database ${host}:${port}..."
+  while ! nc -z "$host" "$port"; do
+    sleep 1
+  done
+  echo "Database is ready!"
+}
+
+if [ -n "${DB_WAIT_HOST:-}" ]; then
+  wait_for_host "$DB_WAIT_HOST" "${DB_WAIT_PORT:-5432}"
+elif getent hosts postgres >/dev/null 2>&1; then
+  wait_for_host postgres 5432
+fi
+
 echo "Running database migrations..."
 uv run alembic upgrade head
 
-# start application
-echo "Starting application..."
-exec uv run uvicorn main:api --host 0.0.0.0 --port 5678
+PORT="${PORT:-5678}"
+echo "Starting application on port ${PORT}..."
+exec uv run uvicorn main:api --host 0.0.0.0 --port "$PORT"

@@ -35,8 +35,12 @@ services:
       - "3001:5678"
     environment:
       - DATABASE_URL=postgresql://postgres:123456@postgres:5432/eigent
+      - database_url=postgresql://postgres:123456@postgres:5432/eigent
+      - DB_WAIT_HOST=postgres
+      - DB_WAIT_PORT=5432
       - ENVIRONMENT=production
       - DEBUG=false
+      - PORT=5678
     # volumes:
     #   - ./app:/app/app
     #   - ./alembic:/app/alembic

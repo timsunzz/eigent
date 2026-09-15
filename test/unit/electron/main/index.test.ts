@@ -145,6 +145,7 @@ vi.mock("../../../../electron/main/init", () => ({
   checkToolInstalled: vi.fn(),
   installDependencies: vi.fn(),
   killProcessOnPort: vi.fn(),
+  killProcessTree: vi.fn(),
   startBackend: vi.fn(),
   findAvailablePort: vi.fn(),
 }));

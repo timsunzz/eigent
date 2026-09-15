@@ -101,4 +101,22 @@ uv run pybabel compile -d lang -l zh_CN
 
 For a fully offline environment, only use local models and local MCP servers, and avoid configuring any external Providers or remote MCP addresses.
 
+### Cloud deploy (Railway)
+
+The API image can also run on Railway (or any host that provides PostgreSQL and a `PORT`):
+
+1. Create a PostgreSQL plugin and an API service that builds `server/Dockerfile` from the repo root.
+2. Set `DATABASE_URL` (or `database_url`) to the Postgres connection string. `postgres://` is accepted and rewritten to `postgresql://`.
+3. Optionally set `secret_key`, `CHAT_SHARE_SECRET_KEY`, and `CHAT_SHARE_SALT`.
+4. The container waits for Postgres when `DB_WAIT_HOST` is set, runs `alembic upgrade head`, then listens on `$PORT` (default `5678`).
+5. Health check: `GET /health`.
+
+A `railway.toml` at the repo root points Railway at `server/Dockerfile`. After deploy, point the desktop app at the public API URL:
+
+```bash
+VITE_BASE_URL=/api
+VITE_USE_LOCAL_PROXY=true
+VITE_PROXY_URL=https://<your-railway-domain>
+```
+
 

@@ -331,7 +331,7 @@ Eigent 基于 [CAMEL-AI.org][camel-ai-org-github] 的研究和基础设施构建
 
 [camel-github]: https://github.com/camel-ai/camel
 [eigent-github]: https://github.com/eigent-ai/eigent
-[contribution-link]: https:/github.com/eigent-ai/eigent/blob/master/CONTRIBUTING.md
+[contribution-link]: https://github.com/eigent-ai/eigent/blob/main/CONTRIBUTING.md
 
 [social-x-link]: https://x.com/Eigent_AI
 [social-x-shield]: https://img.shields.io/badge/-%40Eigent_AI-white?labelColor=gray&logo=x&logoColor=white&style=plastic

@@ -1,4 +1,5 @@
 import asyncio
+import concurrent.futures
 import json
 import os
 import platform
@@ -69,6 +70,16 @@ from app.service.task import (
 from app.service.task import set_process_task
 
 NOW_STR = datetime.datetime.now().strftime("%Y-%m-%d %H:00:00")
+
+
+def _run_coro_from_sync(coro):
+    """Run an async tool from a sync caller without crashing inside a live loop."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
 
 
 class ListenChatAgent(ChatAgent):
@@ -327,15 +338,27 @@ class ListenChatAgent(ChatAgent):
     @traceroot.trace()
     def _execute_tool(self, tool_call_request: ToolCallRequest) -> ToolCallingRecord:
         func_name = tool_call_request.tool_name
-        tool: FunctionTool = self._internal_tools[func_name]
+        args = tool_call_request.args
+        tool_call_id = tool_call_request.tool_call_id
+        tool = self._internal_tools.get(func_name)
+        if tool is None:
+            available = ", ".join(sorted(self._internal_tools.keys())) or "none"
+            result = (
+                f"Tool '{func_name}' is not available on this agent. "
+                f"Available tools: {available}."
+            )
+            traceroot_logger.warning(
+                f"Agent {self.agent_name} called missing tool {func_name}. Available: {available}"
+            )
+            return self._record_tool_calling(
+                func_name, args, result, tool_call_id,
+                mask_output=False,
+                extra_content=tool_call_request.extra_content,
+            )
         # Route async functions to async execution even if they have __wrapped__
         if asyncio.iscoroutinefunction(tool.func):
             # For async functions, we need to use the async execution path
-            return asyncio.run(self._aexecute_tool(tool_call_request))
-
-        # Handle all sync tools ourselves to maintain ContextVar context
-        args = tool_call_request.args
-        tool_call_id = tool_call_request.tool_call_id
+            return _run_coro_from_sync(self._aexecute_tool(tool_call_request))
 
         # Check if tool is wrapped by @listen_toolkit decorator
         # If so, the decorator will handle activate/deactivate events
@@ -420,11 +443,24 @@ class ListenChatAgent(ChatAgent):
     @traceroot.trace()
     async def _aexecute_tool(self, tool_call_request: ToolCallRequest) -> ToolCallingRecord:
         func_name = tool_call_request.tool_name
-        tool: FunctionTool = self._internal_tools[func_name]
-
-        # Always handle tool execution ourselves to maintain ContextVar context
         args = tool_call_request.args
         tool_call_id = tool_call_request.tool_call_id
+        tool = self._internal_tools.get(func_name)
+        if tool is None:
+            available = ", ".join(sorted(self._internal_tools.keys())) or "none"
+            result = (
+                f"Tool '{func_name}' is not available on this agent. "
+                f"Available tools: {available}."
+            )
+            traceroot_logger.warning(
+                f"Agent {self.agent_name} called missing async tool {func_name}. Available: {available}"
+            )
+            return self._record_tool_calling(
+                func_name, args, result, tool_call_id,
+                extra_content=tool_call_request.extra_content,
+            )
+
+        # Always handle tool execution ourselves to maintain ContextVar context
         task_lock = get_task_lock(self.api_task_id)
 
         # Try to get the real toolkit name

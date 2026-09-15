@@ -4,7 +4,8 @@ import path from 'node:path'
 import os, { homedir } from 'node:os'
 import log from 'electron-log'
 import { update, registerUpdateIpcHandlers } from './update'
-import { checkToolInstalled, killProcessOnPort, startBackend } from './init'
+import { checkToolInstalled, killProcessOnPort, killProcessTree, startBackend } from './init'
+import { canSendToWindow } from './utils/safeWebContentsSend'
 import { WebViewManager } from './webview'
 import { FileReader } from './fileReader'
 import { ChildProcessWithoutNullStreams } from 'node:child_process'
@@ -1517,6 +1518,14 @@ const cleanupPythonProcess = async () => {
       // Remove all listeners to prevent memory leaks
       python_process.removeAllListeners();
 
+      if (process.platform !== 'win32') {
+        try {
+          killProcessTree(pid);
+        } catch (error) {
+          log.error('Failed to kill Unix process group:', error);
+        }
+      }
+
       await new Promise<void>((resolve) => {
         // Kill the entire process tree (parent + all children)
         kill(pid, 'SIGTERM', (err) => {
@@ -1577,10 +1586,16 @@ const cleanupPythonProcess = async () => {
   }
 };
 
+let beforeCloseRegistered = false;
+let isQuitting = false;
+
 // before close
 const handleBeforeClose = () => {
-    let isQuitting = false;
-    
+    if (beforeCloseRegistered) {
+      return;
+    }
+    beforeCloseRegistered = true;
+
     app.on('before-quit', () => {
       isQuitting = true;
     });
@@ -1588,7 +1603,13 @@ const handleBeforeClose = () => {
     win?.on("close", (event) => {
       if (!isQuitting) {
         event.preventDefault();
-        win?.webContents.send("before-close");
+        if (canSendToWindow(win)) {
+          try {
+            win?.webContents.send("before-close");
+          } catch (error) {
+            log.warn('Failed to send before-close:', error);
+          }
+        }
       }
     })
 }

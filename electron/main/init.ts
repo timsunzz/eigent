@@ -324,27 +324,8 @@ export async function startBackend(setPort?: (port: number) => void): Promise<an
 
         const killBackendProcess = (proc: any) => {
             if (!proc || !proc.pid) return;
-
             log.info(`Killing backend process ${proc.pid} and its children...`);
-            try {
-                if (process.platform === 'win32') {
-                    spawn('taskkill', ['/pid', proc.pid.toString(), '/T', '/F']);
-                } else {
-                    try {
-                        process.kill(-proc.pid, 'SIGTERM');
-                        setTimeout(() => {
-                            try {
-                                process.kill(-proc.pid, 'SIGKILL');
-                            } catch (e) { }
-                        }, 1000);
-                    } catch (e) {
-                        log.error(`Failed to kill process group: ${e}`);
-                        proc.kill('SIGKILL');
-                    }
-                }
-            } catch (e) {
-                log.error(`Failed to kill backend process: ${e}`);
-            }
+            killProcessTree(proc.pid);
         };
 
         const pollHealthEndpoint = (): void => {
@@ -526,6 +507,36 @@ function checkPortAvailable(port: number): Promise<boolean> {
     });
 }
 
+export function killProcessTree(pid: number): void {
+    if (!pid) return;
+    log.info(`Killing process tree for PID ${pid}`);
+    try {
+        if (process.platform === 'win32') {
+            spawn('taskkill', ['/pid', pid.toString(), '/T', '/F']);
+            return;
+        }
+        try {
+            process.kill(-pid, 'SIGTERM');
+            setTimeout(() => {
+                try {
+                    process.kill(-pid, 'SIGKILL');
+                } catch {
+                    // already gone
+                }
+            }, 1000);
+        } catch (error) {
+            log.error(`Failed to kill process group ${pid}: ${error}`);
+            try {
+                process.kill(pid, 'SIGKILL');
+            } catch {
+                // already gone
+            }
+        }
+    } catch (error) {
+        log.error(`Failed to kill process tree ${pid}: ${error}`);
+    }
+}
+
 export async function killProcessOnPort(port: number): Promise<boolean> {
     try {
         const platform = process.platform;
@@ -553,7 +564,12 @@ export async function killProcessOnPort(port: number): Promise<boolean> {
             await execAsync(`lsof -ti:${port} | xargs kill -9 2>/dev/null || true`);
         }
         else {
-            await execAsync(`fuser -k ${port}/tcp 2>/dev/null || true`);
+            try {
+                await execAsync(`fuser -k ${port}/tcp 2>/dev/null || true`);
+            } catch {
+                // fuser is missing on some minimal Linux images
+            }
+            await execAsync(`lsof -ti:${port} | xargs kill -9 2>/dev/null || true`);
         }
 
 

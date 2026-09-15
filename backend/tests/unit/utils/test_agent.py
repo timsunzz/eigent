@@ -241,6 +241,41 @@ class TestListenChatAgent:
                 # Should queue toolkit activation and deactivation notifications
                 assert mock_task_lock.put_queue.call_count >= 2
 
+    def test_listen_chat_agent_execute_missing_tool(self, mock_task_lock):
+        """Missing tools should return a recorded error instead of KeyError."""
+        api_task_id = "test_api_task_123"
+        agent_name = "TestAgent"
+
+        with patch('app.utils.agent.get_task_lock', return_value=mock_task_lock), \
+             patch('camel.models.ModelFactory.create') as mock_create_model:
+            mock_backend = MagicMock()
+            mock_backend.model_type = "gpt-4"
+            mock_backend.current_model = MagicMock()
+            mock_backend.current_model.model_type = "gpt-4"
+            mock_create_model.return_value = mock_backend
+
+            agent = ListenChatAgent(
+                api_task_id=api_task_id,
+                agent_name=agent_name,
+                model="gpt-4"
+            )
+            agent._internal_tools = {}
+
+            tool_call_request = MagicMock(spec=ToolCallRequest)
+            tool_call_request.tool_name = "search_google"
+            tool_call_request.tool_call_id = "tool_call_missing"
+            tool_call_request.args = {"query": "news"}
+            tool_call_request.extra_content = None
+
+            mock_record = MagicMock(spec=ToolCallingRecord)
+            with patch.object(agent, '_record_tool_calling', return_value=mock_record) as mock_record_func:
+                result = agent._execute_tool(tool_call_request)
+
+            assert result is mock_record
+            recorded_result = mock_record_func.call_args.args[2]
+            assert "search_google" in recorded_result
+            assert "not available" in recorded_result
+
     @pytest.mark.asyncio
     async def test_listen_chat_agent_aexecute_tool(self, mock_task_lock):
         """Test ListenChatAgent _aexecute_tool method."""

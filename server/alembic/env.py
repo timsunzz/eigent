@@ -12,6 +12,13 @@ from alembic import context
 from sqlmodel import SQLModel
 from app.component.environment import auto_import, env_not_empty
 
+
+def _alembic_database_url() -> str:
+    url = env_not_empty("database_url")
+    if url.startswith("postgres://"):
+        return "postgresql://" + url[len("postgres://") :]
+    return url
+
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
@@ -111,7 +118,7 @@ def run_migrations_online() -> None:
 
     """
     options = config.get_section(config.config_ini_section, {})
-    options["sqlalchemy.url"] = env_not_empty("database_url")
+    options["sqlalchemy.url"] = _alembic_database_url()
     connectable = engine_from_config(
         options,
         prefix="sqlalchemy.",

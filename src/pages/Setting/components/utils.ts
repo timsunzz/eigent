@@ -34,4 +34,22 @@ export function arrayToArgsJson(arr: string[]): string {
   
   // Return as JSON stringified array
   return JSON.stringify(filtered);
+}
+
+/**
+ * Provider rows historically used the misspelled `is_vaild` enum (1/2)
+ * while the UI sent a boolean `is_valid`. Treat either as configured.
+ */
+export function isProviderConfigured(provider: {
+  is_valid?: boolean | string | number | null;
+  is_vaild?: boolean | string | number | null;
+} | null | undefined): boolean {
+  if (!provider) return false;
+  const values = [provider.is_valid, provider.is_vaild];
+  return values.some((value) =>
+    value === true ||
+    value === 2 ||
+    value === "2" ||
+    value === "is_valid"
+  );
 } 
