@@ -14,12 +14,18 @@
 
 import asyncio
 import os
+import sys
 import tempfile
 from pathlib import Path
 from typing import AsyncGenerator, Generator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+# Match main.py: backend imports shared utils from the project root.
+_project_root = Path(__file__).resolve().parent.parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.testclient import TestClient

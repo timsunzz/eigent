@@ -144,12 +144,19 @@ describe('useInstallationSetup Hook', () => {
     it('should handle install-dependencies-complete event with success', () => {
       renderHook(() => useInstallationSetup())
 
-      // Get the registered callback
       const completeCallback = electronAPI.onInstallDependenciesComplete.mock.calls[0][0]
-      const completeData = { success: true }
-      
+      const backendReadyCallback = electronAPI.onBackendReady.mock.calls[0][0]
+
       act(() => {
-        completeCallback(completeData)
+        completeCallback({ success: true })
+      })
+
+      // setSuccess is deferred until backend is ready
+      expect(mockInstallationStore.setSuccess).not.toHaveBeenCalled()
+      expect(mockAuthStore.setInitState).not.toHaveBeenCalledWith('done')
+
+      act(() => {
+        backendReadyCallback({ success: true, port: 5001 })
       })
 
       expect(mockInstallationStore.setSuccess).toHaveBeenCalled()
@@ -194,6 +201,7 @@ describe('useInstallationSetup Hook', () => {
       expect(electronAPI.removeAllListeners).toHaveBeenCalledWith('install-dependencies-start')
       expect(electronAPI.removeAllListeners).toHaveBeenCalledWith('install-dependencies-log')
       expect(electronAPI.removeAllListeners).toHaveBeenCalledWith('install-dependencies-complete')
+      expect(electronAPI.removeAllListeners).toHaveBeenCalledWith('backend-ready')
     })
   })
 
@@ -256,7 +264,6 @@ describe('useInstallationSetup Hook', () => {
 
       renderHook(() => useInstallationSetup())
 
-      // Simulate uvicorn detecting and installing dependencies
       act(() => {
         electronAPI.simulateUvicornStartup()
       })
@@ -265,11 +272,16 @@ describe('useInstallationSetup Hook', () => {
         expect(mockInstallationStore.startInstallation).toHaveBeenCalled()
       })
 
-      // Should receive logs and completion
       await vi.waitFor(() => {
         expect(mockInstallationStore.addLog).toHaveBeenCalled()
-        expect(mockInstallationStore.setSuccess).toHaveBeenCalled()
       })
+
+      const backendReadyCallback = electronAPI.onBackendReady.mock.calls[0][0]
+      act(() => {
+        backendReadyCallback({ success: true, port: 5001 })
+      })
+
+      expect(mockInstallationStore.setSuccess).toHaveBeenCalled()
     })
   })
 

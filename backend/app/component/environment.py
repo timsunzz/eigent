@@ -13,6 +13,10 @@ traceroot_logger = traceroot.get_logger("env")
 # Thread-local storage for user-specific environment
 _thread_local = threading.local()
 
+# Cache parsed user env files to avoid re-reading on every env() lookup
+_user_env_cache: dict[str, tuple[float, dict[str, str | None]]] = {}
+_user_env_cache_lock = threading.Lock()
+
 # Default global environment path
 default_env_path = os.path.join(os.path.expanduser("~"), ".eigent", ".env")
 load_dotenv(dotenv_path=default_env_path)
@@ -29,6 +33,8 @@ def set_user_env_path(env_path: str | None = None):
         _thread_local.env_path = env_path
         # Load user-specific environment variables
         load_dotenv(dotenv_path=env_path, override=True)
+        with _user_env_cache_lock:
+            _user_env_cache.pop(env_path, None)
         traceroot_logger.info("User-specific environment loaded", extra={"env_path": env_path})
     else:
         # Clear thread-local env_path to fall back to global
@@ -59,6 +65,21 @@ def env(key: str, default: str) -> str: ...
 def env(key: str, default: Any) -> Any: ...
 
 
+def _get_user_env_values(env_path: str) -> dict[str, str | None]:
+    """Load user env values with mtime-based caching."""
+    mtime = os.path.getmtime(env_path)
+    with _user_env_cache_lock:
+        cached = _user_env_cache.get(env_path)
+        if cached and cached[0] == mtime:
+            return cached[1]
+
+    from dotenv import dotenv_values
+    values = dotenv_values(env_path)
+    with _user_env_cache_lock:
+        _user_env_cache[env_path] = (mtime, values)
+    return values
+
+
 def env(key: str, default=None):
     """
     Get environment variable.
@@ -67,9 +88,7 @@ def env(key: str, default=None):
     """
     # If we have a user-specific environment path, try to reload it to get latest values
     if hasattr(_thread_local, 'env_path') and os.path.exists(_thread_local.env_path):
-        # Temporarily load user-specific env to get the latest value
-        from dotenv import dotenv_values
-        user_env_values = dotenv_values(_thread_local.env_path)
+        user_env_values = _get_user_env_values(_thread_local.env_path)
         if key in user_env_values:
             value = user_env_values[key] or default
             traceroot_logger.debug("Environment variable retrieved from user-specific config", extra={"key": key, "env_path": _thread_local.env_path, "has_value": value is not None})

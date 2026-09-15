@@ -639,10 +639,13 @@ const chatStore = (initial?: Partial<ChatStore>) => createStore<ChatStore>()(
 					// Only ignore messages if task is finished and not a valid post-completion event
 					// Valid events after task completion:
 					// - Task switching: confirmed, new_task_state, end
+					// - Queue management: add_task, remove_task
 					// - Multi-turn simple answer: wait_confirm
 					const isTaskSwitchingEvent = agentMessages.step === "confirmed" ||
 						agentMessages.step === "new_task_state" ||
-						agentMessages.step === "end";
+						agentMessages.step === "end" ||
+						agentMessages.step === "add_task" ||
+						agentMessages.step === "remove_task";
 
 					const isMultiTurnSimpleAnswer = agentMessages.step === "wait_confirm";
 
