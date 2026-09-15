@@ -223,11 +223,12 @@ class TestListenChatAgent:
             agent._internal_tools = {"test_tool": mock_tool}
             
             # Mock tool call request
-            tool_call_request = MagicMock(spec=ToolCallRequest)
+            tool_call_request = MagicMock()
             tool_call_request.tool_name = "test_tool"
             tool_call_request.id = "tool_call_123"
             tool_call_request.tool_call_id = "tool_call_123"
             tool_call_request.args = {"arg1": "value1"}
+            tool_call_request.extra_content = None
             
             # Mock tool calling record
             mock_record = MagicMock(spec=ToolCallingRecord)
@@ -261,7 +262,7 @@ class TestListenChatAgent:
             )
             agent._internal_tools = {}
 
-            tool_call_request = MagicMock(spec=ToolCallRequest)
+            tool_call_request = MagicMock()
             tool_call_request.tool_name = "search_google"
             tool_call_request.tool_call_id = "tool_call_missing"
             tool_call_request.args = {"query": "news"}
