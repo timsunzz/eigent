@@ -1,14 +1,23 @@
 import log from 'electron-log'
 import { getMainWindow } from "../init";
 
+let isAppQuitting = false;
+
+export function markAppQuitting() {
+  isAppQuitting = true;
+}
+
 /**
  * Safely send message to main window if it exists and is not destroyed
  * @param channel - The IPC channel to send message to
  * @param data - The data to send
  */
 function safeMainWindowSend(channel: string, data?: any) {
+  if (isAppQuitting) {
+    return false;
+  }
   const mainWindow = getMainWindow();
-  if (mainWindow && !mainWindow.isDestroyed()) {
+  if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
     mainWindow.webContents.send(channel, data);
     return true;
   } else {

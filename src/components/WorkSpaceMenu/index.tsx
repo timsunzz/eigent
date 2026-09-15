@@ -81,11 +81,13 @@ export function WorkSpaceMenu() {
 
 	useEffect(() => {
 		const cleanup = window.electronAPI.onWebviewNavigated((id: string, url: string) => {
+			const activeTask = chatStore.tasks[chatStore.activeTaskId as string];
+			if (!activeTask) return;
 			let webViewUrls = [
-				...chatStore.tasks[chatStore.activeTaskId as string].webViewUrls,
+				...activeTask.webViewUrls,
 			];
 			let taskAssigning = [
-				...chatStore.tasks[chatStore.activeTaskId as string].taskAssigning,
+				...activeTask.taskAssigning,
 			];
 			const hasId = taskAssigning.find((item) =>
 				item.activeWebviewIds?.find((webview) => webview.id === id)
@@ -323,15 +325,15 @@ export function WorkSpaceMenu() {
 								value="documentWorkSpace"
 								className="!w-10 !h-10 p-2 relative"
 							>
-								{chatStore.tasks[chatStore.activeTaskId as string].nuwFileNum >
-									0 && (
+								{(chatStore.tasks[chatStore.activeTaskId as string]
+									?.nuwFileNum ?? 0) > 0 && (
 									<Badge
 										className="absolute top-0.5 right-0.5 h-4 min-w-4 rounded-full px-1 font-mono tabular-nums bg-icon-cuation text-white-100%"
 										variant="destructive"
 									>
 										{
 											chatStore.tasks[chatStore.activeTaskId as string]
-												.nuwFileNum
+												?.nuwFileNum
 										}
 									</Badge>
 								)}

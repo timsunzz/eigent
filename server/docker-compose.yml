@@ -5,19 +5,20 @@ services:
     container_name: eigent_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: eigent
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: ${POSTGRES_DB:-eigent}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123456}
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     ports:
-      - "5432:5432"
+      # Bind to localhost only so the default password is not exposed on LAN.
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       #- ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
     networks:
       - eigent_network
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres -d eigent" ]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-eigent}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -28,20 +29,18 @@ services:
       context: ..
       dockerfile: server/Dockerfile
       args:
-        database_url: postgresql://postgres:123456@postgres:5432/eigent
+        database_url: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-123456}@postgres:5432/${POSTGRES_DB:-eigent}
     container_name: eigent_api
     restart: unless-stopped
     ports:
       - "3001:5678"
     environment:
-      - DATABASE_URL=postgresql://postgres:123456@postgres:5432/eigent
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-123456}@postgres:5432/${POSTGRES_DB:-eigent}
+      - database_url=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-123456}@postgres:5432/${POSTGRES_DB:-eigent}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
       - ENVIRONMENT=production
       - DEBUG=false
-    # volumes:
-    #   - ./app:/app/app
-    #   - ./alembic:/app/alembic
-    #   - ./lang:/app/lang
-    #   - ./public:/app/public
     depends_on:
       postgres:
         condition: service_healthy

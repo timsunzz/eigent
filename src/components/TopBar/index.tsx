@@ -175,7 +175,7 @@ function HeaderWin() {
 			}
 
 			// Delete from history using historyId
-			if (historyId && task.status !== "finished") {
+			if (historyId && task && task.status !== "finished") {
 				try {
 					await proxyFetchDelete(`/api/chat/history/${historyId}`);
 					// Remove from local store

@@ -312,10 +312,14 @@ class TaskLock:
 
     async def put_human_input(self, agent: str, data: Any = None):
         logger.debug("Adding human input", extra={"task_id": self.id, "agent": agent, "has_data": data is not None})
+        if agent not in self.human_input:
+            self.add_human_input_listen(agent)
         await self.human_input[agent].put(data)
 
     async def get_human_input(self, agent: str):
         logger.debug("Getting human input", extra={"task_id": self.id, "agent": agent})
+        if agent not in self.human_input:
+            self.add_human_input_listen(agent)
         return await self.human_input[agent].get()
 
     def add_human_input_listen(self, agent: str):
@@ -396,10 +400,16 @@ def create_task_lock(id: str) -> TaskLock:
     logger.info("Creating new task lock", extra={"task_id": id})
     task_locks[id] = TaskLock(id=id, queue=asyncio.Queue(), human_input={})
 
-    # Start cleanup task if not running
-    # global _cleanup_task
-    # if _cleanup_task is None or _cleanup_task.done():
-    #     _cleanup_task = asyncio.create_task(_periodic_cleanup())
+    # Reclaim abandoned project locks so queues and workforce state do not leak.
+    # Only schedule cleanup when an event loop is already running (API path).
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    if loop is not None:
+        global _cleanup_task
+        if _cleanup_task is None or _cleanup_task.done():
+            _cleanup_task = loop.create_task(_periodic_cleanup())
 
     logger.info("Task lock created successfully", extra={"task_id": id, "total_task_locks": len(task_locks)})
     return task_locks[id]

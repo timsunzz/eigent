@@ -3,6 +3,7 @@ from camel.toolkits import SearchToolkit as BaseSearchToolkit
 from camel.toolkits.function_tool import FunctionTool
 import httpx
 import os
+import threading
 from app.component.environment import env, env_not_empty
 from app.service.task import Agents
 from app.utils.listen.toolkit_listen import auto_listen_toolkit, listen_toolkit
@@ -10,6 +11,10 @@ from app.utils.toolkit.abstract_toolkit import AbstractToolkit
 from utils import traceroot_wrapper as traceroot
 
 logger = traceroot.get_logger("search_toolkit")
+
+_search_tools_cache: dict[str, list[FunctionTool]] = {}
+_search_tools_lock = threading.Lock()
+_google_env_lock = threading.Lock()
 
 
 @auto_listen_toolkit(BaseSearchToolkit)
@@ -95,25 +100,26 @@ class SearchToolkit(BaseSearchToolkit, AbstractToolkit):
         # If user has configured their own Google API keys, use them
         if self._user_google_api_key and self._user_search_engine_id:
             logger.info("Using user-configured Google Search API")
-            # Temporarily set environment variables for this search
-            old_google_key = os.environ.get("GOOGLE_API_KEY")
-            old_search_id = os.environ.get("SEARCH_ENGINE_ID")
+            # Temporarily set environment variables for this search.
+            # Parallel workers share process env, so serialize mutations.
+            with _google_env_lock:
+                old_google_key = os.environ.get("GOOGLE_API_KEY")
+                old_search_id = os.environ.get("SEARCH_ENGINE_ID")
 
-            try:
-                os.environ["GOOGLE_API_KEY"] = self._user_google_api_key
-                os.environ["SEARCH_ENGINE_ID"] = self._user_search_engine_id
-                return super().search_google(query, search_type, number_of_result_pages, start_page)
-            finally:
-                # Restore original environment variables
-                if old_google_key is not None:
-                    os.environ["GOOGLE_API_KEY"] = old_google_key
-                elif "GOOGLE_API_KEY" in os.environ:
-                    del os.environ["GOOGLE_API_KEY"]
+                try:
+                    os.environ["GOOGLE_API_KEY"] = self._user_google_api_key
+                    os.environ["SEARCH_ENGINE_ID"] = self._user_search_engine_id
+                    return super().search_google(query, search_type, number_of_result_pages, start_page)
+                finally:
+                    if old_google_key is not None:
+                        os.environ["GOOGLE_API_KEY"] = old_google_key
+                    elif "GOOGLE_API_KEY" in os.environ:
+                        del os.environ["GOOGLE_API_KEY"]
 
-                if old_search_id is not None:
-                    os.environ["SEARCH_ENGINE_ID"] = old_search_id
-                elif "SEARCH_ENGINE_ID" in os.environ:
-                    del os.environ["SEARCH_ENGINE_ID"]
+                    if old_search_id is not None:
+                        os.environ["SEARCH_ENGINE_ID"] = old_search_id
+                    elif "SEARCH_ENGINE_ID" in os.environ:
+                        del os.environ["SEARCH_ENGINE_ID"]
         else:
             # Fallback to cloud search
             logger.info("Using cloud Google Search (no user configuration found)")
@@ -126,18 +132,28 @@ class SearchToolkit(BaseSearchToolkit, AbstractToolkit):
         number_of_result_pages: int = 10,
         start_page: int = 1
     ):
-        url = env_not_empty("SERVER_URL")
-        res = httpx.get(
-            url + "/proxy/google",
-            params={
-                "query": query,
-                "search_type": search_type,
-                "number_of_result_pages": number_of_result_pages,
-                "start_page": start_page
-            },
-            headers={"api-key": env_not_empty("cloud_api_key")},
-        )
-        return res.json()
+        try:
+            url = env_not_empty("SERVER_URL")
+            res = httpx.get(
+                url + "/proxy/google",
+                params={
+                    "query": query,
+                    "search_type": search_type,
+                    "number_of_result_pages": number_of_result_pages,
+                    "start_page": start_page
+                },
+                headers={"api-key": env_not_empty("cloud_api_key")},
+                timeout=30.0,
+            )
+            res.raise_for_status()
+            data = res.json()
+            if not isinstance(data, list):
+                logger.error("Unexpected google proxy response: %s", data)
+                return []
+            return data
+        except Exception as exc:
+            logger.error("Cloud Google Search failed: %s", exc, exc_info=True)
+            return [{"error": f"Cloud Google Search failed: {exc}"}]
 
     # @listen_toolkit(
     #     BaseSearchToolkit.search_duckduckgo,
@@ -339,34 +355,19 @@ class SearchToolkit(BaseSearchToolkit, AbstractToolkit):
 
     @classmethod
     def get_can_use_tools(cls, api_task_id: str) -> list[FunctionTool]:
-        search_toolkit = SearchToolkit(api_task_id)
-        tools = [
-            # FunctionTool(search_toolkit.search_wiki),
-            # FunctionTool(search_toolkit.search_duckduckgo),
-            # FunctionTool(search_toolkit.search_baidu),
-            # FunctionTool(search_toolkit.search_bing),
-        ]
-        # if env("LINKUP_API_KEY"):
-        #     tools.append(FunctionTool(search_toolkit.search_linkup))
+        with _search_tools_lock:
+            cached = _search_tools_cache.get(api_task_id)
+            if cached is not None:
+                return cached
 
-        # if env("BRAVE_API_KEY"):
-        #     tools.append(FunctionTool(search_toolkit.search_brave))
-
-        if (env("GOOGLE_API_KEY") and env("SEARCH_ENGINE_ID")) or env("cloud_api_key"):
-            tools.append(FunctionTool(search_toolkit.search_google))
-
-        # if env("TAVILY_API_KEY"):
-        #     tools.append(FunctionTool(search_toolkit.tavily_search))
-
-        # if env("BOCHA_API_KEY"):
-        #     tools.append(FunctionTool(search_toolkit.search_bocha))
-
-        # if env("EXA_API_KEY") or env("cloud_api_key"):
-        #     tools.append(FunctionTool(search_toolkit.search_exa))
-
-        # if env("TONGXIAO_API_KEY"):
-        #     tools.append(FunctionTool(search_toolkit.search_alibaba_tongxiao))
-        return tools
+            search_toolkit = SearchToolkit(api_task_id)
+            # Always register search_google. The method itself falls back to
+            # cloud search when local CSE keys are missing. Rebuilding this
+            # list per parallel subtask previously dropped the tool when
+            # thread-local env was empty (KeyError: 'search_google').
+            tools = [FunctionTool(search_toolkit.search_google)]
+            _search_tools_cache[api_task_id] = tools
+            return tools
 
     # def get_tools(self) -> List[FunctionTool]:
     #     return [FunctionTool(self.search_exa)]

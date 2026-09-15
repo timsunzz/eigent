@@ -241,6 +241,15 @@ class TestTaskLock:
         assert response == "user response"
 
     @pytest.mark.asyncio
+    async def test_put_human_input_creates_missing_queue(self):
+        """Unknown agents should get a queue instead of raising KeyError."""
+        task_lock = TaskLock("test_123", asyncio.Queue(), {})
+
+        await task_lock.put_human_input("missing_agent", "hello")
+        assert "missing_agent" in task_lock.human_input
+        assert await task_lock.get_human_input("missing_agent") == "hello"
+
+    @pytest.mark.asyncio
     async def test_task_lock_background_task_management(self):
         """Test background task management."""
         task_lock = TaskLock("test_123", asyncio.Queue(), {})

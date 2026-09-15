@@ -284,6 +284,20 @@ describe('ChatStore - Core Functionality', () => {
       })
     })
 
+    it('should ignore addMessages when the task no longer exists', () => {
+      const { result } = renderHook(() => useChatStore())
+
+      act(() => {
+        expect(() => {
+          result.current.getState().addMessages('missing-task', {
+            id: generateUniqueId(),
+            role: 'user',
+            content: 'orphan message'
+          })
+        }).not.toThrow()
+      })
+    })
+
     it('should maintain message order', () => {
       const { result } = renderHook(() => useChatStore())
       
@@ -460,6 +474,26 @@ describe('ChatStore - Core Functionality', () => {
         
         // 2 out of 4 = 50%
         expect(result.current.getState().tasks[taskId].progressValue).toBe(50)
+      })
+    })
+
+    it('should write progress to the requested task, not only the active one', () => {
+      const { result } = renderHook(() => useChatStore())
+
+      act(() => {
+        const backgroundTaskId = result.current.getState().create()
+        const activeTaskId = result.current.getState().create()
+        result.current.getState().setActiveTaskId(activeTaskId)
+
+        result.current.getState().setTaskRunning(backgroundTaskId, [
+          { id: '1', content: 'Task 1', status: 'completed' },
+          { id: '2', content: 'Task 2', status: 'running' },
+        ] as any)
+
+        result.current.getState().computedProgressValue(backgroundTaskId)
+
+        expect(result.current.getState().tasks[backgroundTaskId].progressValue).toBe(50)
+        expect(result.current.getState().tasks[activeTaskId].progressValue).toBe(0)
       })
     })
   })

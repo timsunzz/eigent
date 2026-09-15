@@ -324,10 +324,59 @@ class ListenChatAgent(ChatAgent):
         assert res is not None
         return res
 
+    def _resolve_internal_tool(self, func_name: str) -> FunctionTool | None:
+        """Look up a registered tool without raising KeyError.
+
+        Parallel workforce workers sometimes rebuild tool maps, so the LLM may
+        request a name that is registered under a slightly different key
+        (for example ``SearchToolkit.search_google`` vs ``search_google``).
+        """
+        tool = self._internal_tools.get(func_name)
+        if tool is not None:
+            return tool
+        for registered_name, candidate in self._internal_tools.items():
+            if (
+                registered_name.endswith(f".{func_name}")
+                or registered_name.endswith(func_name)
+                or func_name.endswith(registered_name)
+            ):
+                return candidate
+        return None
+
+    def _missing_tool_record(
+        self, tool_call_request: ToolCallRequest, func_name: str
+    ) -> ToolCallingRecord:
+        available = ", ".join(sorted(self._internal_tools.keys())) or "none"
+        error_msg = (
+            f"Tool '{func_name}' is not available on this agent. "
+            f"Registered tools: {available}"
+        )
+        traceroot_logger.error(
+            f"Agent {self.agent_name} missing tool {func_name}. Available: {available}"
+        )
+        try:
+            return self._record_tool_calling(
+                func_name,
+                tool_call_request.args,
+                f"Tool execution failed: {error_msg}",
+                tool_call_request.tool_call_id,
+                mask_output=False,
+                extra_content=getattr(tool_call_request, "extra_content", None),
+            )
+        except TypeError:
+            return self._record_tool_calling(
+                func_name,
+                tool_call_request.args,
+                f"Tool execution failed: {error_msg}",
+                tool_call_request.tool_call_id,
+            )
+
     @traceroot.trace()
     def _execute_tool(self, tool_call_request: ToolCallRequest) -> ToolCallingRecord:
         func_name = tool_call_request.tool_name
-        tool: FunctionTool = self._internal_tools[func_name]
+        tool = self._resolve_internal_tool(func_name)
+        if tool is None:
+            return self._missing_tool_record(tool_call_request, func_name)
         # Route async functions to async execution even if they have __wrapped__
         if asyncio.iscoroutinefunction(tool.func):
             # For async functions, we need to use the async execution path
@@ -420,7 +469,9 @@ class ListenChatAgent(ChatAgent):
     @traceroot.trace()
     async def _aexecute_tool(self, tool_call_request: ToolCallRequest) -> ToolCallingRecord:
         func_name = tool_call_request.tool_name
-        tool: FunctionTool = self._internal_tools[func_name]
+        tool = self._resolve_internal_tool(func_name)
+        if tool is None:
+            return self._missing_tool_record(tool_call_request, func_name)
 
         # Always handle tool execution ourselves to maintain ContextVar context
         args = tool_call_request.args

@@ -65,6 +65,16 @@ class TestListenChatAgent:
             assert agent.agent_name == agent_name
             assert isinstance(agent, ChatAgent)
 
+    def test_resolve_internal_tool_matches_suffix_and_missing_names(self):
+        agent = ListenChatAgent.__new__(ListenChatAgent)
+        agent.agent_name = "Search Agent"
+        fake_tool = MagicMock()
+        agent._internal_tools = {"SearchToolkit.search_google": fake_tool}
+
+        assert agent._resolve_internal_tool("search_google") is fake_tool
+        assert agent._resolve_internal_tool("SearchToolkit.search_google") is fake_tool
+        assert agent._resolve_internal_tool("search_bing") is None
+
     def test_listen_chat_agent_step_with_string_input(self, mock_task_lock):
         """Test ListenChatAgent step method with string input."""
         api_task_id = "test_api_task_123"

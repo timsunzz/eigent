@@ -211,8 +211,10 @@ const chatStore = (initial?: Partial<ChatStore>) => createStore<ChatStore>()(
 			return taskId
 		},
 		computedProgressValue(taskId: string) {
-			const { tasks, setProgressValue, activeTaskId } = get()
-			const taskRunning = [...tasks[taskId].taskRunning]
+			const { tasks, setProgressValue } = get()
+			const currentTask = tasks[taskId]
+			if (!currentTask) return
+			const taskRunning = [...currentTask.taskRunning]
 			const finshedTask = taskRunning?.filter(
 				(task) => task.status === "completed" || task.status === "failed"
 			).length;
@@ -221,7 +223,7 @@ const chatStore = (initial?: Partial<ChatStore>) => createStore<ChatStore>()(
 				100
 			).toFixed(2);
 			setProgressValue(
-				activeTaskId as string,
+				taskId,
 				Number(taskProgress)
 			);
 		},
@@ -244,6 +246,12 @@ const chatStore = (initial?: Partial<ChatStore>) => createStore<ChatStore>()(
 				}
 			} catch (error) {
 				console.warn('Error aborting SSE connection in removeTask:', error);
+			}
+
+			try {
+				get().clearStreamingDecomposeText(taskId);
+			} catch (error) {
+				console.warn('Error clearing streaming decompose text in removeTask:', error);
 			}
 
 			set((state) => {
@@ -578,9 +586,18 @@ const chatStore = (initial?: Partial<ChatStore>) => createStore<ChatStore>()(
 			};
 
 			// Function to update locked references (only for special cases like replay)
-			const updateLockedReferences = (newChatStore: VanillaChatStore, newTaskId: string) => {
+			const updateLockedReferences = (newChatStore: VanillaChatStore, nextTaskId: string) => {
+				const previousLockedTaskId = lockedTaskId;
 				lockedChatStore = newChatStore;
-				lockedTaskId = newTaskId;
+				lockedTaskId = nextTaskId;
+				// Keep the live SSE AbortController reachable after the task id
+				// switches, otherwise stop/remove abort the wrong key.
+				if (previousLockedTaskId && activeSSEControllers[previousLockedTaskId]) {
+					activeSSEControllers[nextTaskId] = activeSSEControllers[previousLockedTaskId];
+					if (previousLockedTaskId !== nextTaskId) {
+						delete activeSSEControllers[previousLockedTaskId];
+					}
+				}
 			};
 
 			fetchEventSource(api, {
@@ -1920,19 +1937,23 @@ const chatStore = (initial?: Partial<ChatStore>) => createStore<ChatStore>()(
 			});
 		},
 		addMessages(taskId, message) {
-			set((state) => ({
-				...state,
-				tasks: {
-					...state.tasks,
-					[taskId]: {
-						...state.tasks[taskId],
-						messages: [
-							...state.tasks[taskId].messages,
-							message,
-						],
+			set((state) => {
+				const task = state.tasks[taskId];
+				if (!task) return state;
+				return {
+					...state,
+					tasks: {
+						...state.tasks,
+						[taskId]: {
+							...task,
+							messages: [
+								...task.messages,
+								message,
+							],
+						},
 					},
-				},
-			}))
+				};
+			})
 		},
 		setAttaches(taskId, attaches) {
 			set((state) => ({
@@ -2514,6 +2535,14 @@ const chatStore = (initial?: Partial<ChatStore>) => createStore<ChatStore>()(
 				});
 			} catch (error) {
 				console.error('Error during SSE cleanup in clearTasks:', error);
+			}
+
+			try {
+				Object.keys(streamingDecomposeTextTimers).forEach(taskId => {
+					get().clearStreamingDecomposeText(taskId);
+				});
+			} catch (error) {
+				console.error('Error during streaming decompose cleanup in clearTasks:', error);
 			}
 
 			window.ipcRenderer.invoke('restart-backend')

@@ -49,7 +49,9 @@ npm run dev
 
 ### Ports
 - API: Host `3001` → Container `5678`
-- PostgreSQL: Host `5432` → Container `5432`
+- PostgreSQL: Host `127.0.0.1:5432` → Container `5432` (localhost only)
+
+Set `POSTGRES_PASSWORD` in `server/.env` before exposing this stack beyond your machine. The compose file defaults to a local-only bind so the development password is not advertised on the LAN.
 
 ### Data Persistence
 - DB data is stored in Docker volume `server_postgres_data` at `/var/lib/postgresql/data` inside the container

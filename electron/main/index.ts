@@ -20,6 +20,7 @@ import mime from "mime";
 import axios from 'axios';
 import FormData from 'form-data';
 import { checkAndInstallDepsOnUpdate, PromiseReturnType, getInstallationStatus } from './install-deps'
+import { markAppQuitting, safeMainWindowSend } from './utils/safeWebContentsSend'
 import { isBinaryExists, getBackendPath, getVenvPath } from './utils/process'
 
 const userData = app.getPath('userData');
@@ -220,7 +221,7 @@ const setupSingleInstanceLock = () => {
       log.info("second-instance", argv);
       const url = argv.find(arg => arg.startsWith('eigent://'));
       if (url) handleProtocolUrl(url);
-      if (win) win.show();
+      if (win && !win.isDestroyed()) win.show();
     });
 
     app.on('open-url', (event, url) => {
@@ -1366,8 +1367,7 @@ async function createWindow() {
   // IMPORTANT: Always send install-dependencies-complete event when installation check succeeds
   // This includes both cases: actual installation completed AND installation was skipped (already installed)
   // The frontend needs this event to properly transition from installation screen to main app
-  if (!win.isDestroyed()) {
-    win.webContents.send('install-dependencies-complete', { success: true, code: 0 });
+  if (safeMainWindowSend('install-dependencies-complete', { success: true, code: 0 })) {
     log.info("[DEPS INSTALL] Sent install-dependencies-complete event to frontend");
   }
 
@@ -1588,7 +1588,9 @@ const handleBeforeClose = () => {
     win?.on("close", (event) => {
       if (!isQuitting) {
         event.preventDefault();
-        win?.webContents.send("before-close");
+        if (win && !win.isDestroyed() && !win.webContents.isDestroyed()) {
+          win.webContents.send("before-close");
+        }
       }
     })
 }
@@ -1727,6 +1729,7 @@ app.on('activate', () => {
 app.on('before-quit', async (event) => {
   log.info('before-quit');
   log.info('quit python_process.pid: ' + python_process?.pid);
+  markAppQuitting();
 
   // Prevent default quit to ensure cleanup completes
   event.preventDefault();

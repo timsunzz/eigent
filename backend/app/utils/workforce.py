@@ -232,7 +232,9 @@ class Workforce(BaseWorkforce):
             logger.info("[DECOMPOSE] Workforce reset complete")
 
         self._task = task
-        task.state = TaskState.FAILED
+        # Keep the parent task open while decomposition runs. The previous
+        # FAILED assignment leaked a false failure into SSE task_state events.
+        task.state = TaskState.OPEN
 
         if coordinator_context:
             logger.info(f"[DECOMPOSE] Adding coordinator context to task")

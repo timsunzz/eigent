@@ -49,6 +49,37 @@ import os
 
 logger = traceroot.get_logger("chat_service")
 
+# Directory mtime + file set cache so repeated context builds do not walk
+# the same working directories on every improve / start turn.
+_workdir_file_cache: dict[str, tuple[float, int, set[str]]] = {}
+_SKIP_DIR_NAMES = {".", "node_modules", "__pycache__", "venv"}
+
+
+def _collect_generated_files(working_directory: str) -> set[str]:
+    """Return generated files under working_directory, using a cheap cache."""
+    if not working_directory or not os.path.exists(working_directory):
+        return set()
+
+    try:
+        dir_mtime = os.path.getmtime(working_directory)
+        dir_nlink = os.stat(working_directory).st_nlink
+    except OSError:
+        return set()
+
+    cached = _workdir_file_cache.get(working_directory)
+    if cached and cached[0] == dir_mtime and cached[1] == dir_nlink:
+        return cached[2]
+
+    generated_files: set[str] = set()
+    for root, dirs, files in os.walk(working_directory):
+        dirs[:] = [d for d in dirs if not d.startswith(".") and d not in _SKIP_DIR_NAMES]
+        for file in files:
+            if not file.startswith(".") and not file.endswith((".pyc", ".tmp")):
+                generated_files.add(os.path.abspath(os.path.join(root, file)))
+
+    _workdir_file_cache[working_directory] = (dir_mtime, dir_nlink, generated_files)
+    return generated_files
+
 
 def format_task_context(task_data: dict, seen_files: set | None = None, skip_files: bool = False) -> str:
     """Format structured task data into a readable context string.
@@ -71,25 +102,17 @@ def format_task_context(task_data: dict, seen_files: set | None = None, skip_fil
         working_directory = task_data.get('working_directory')
         if working_directory:
             try:
-                if os.path.exists(working_directory):
-                    generated_files = []
-                    for root, dirs, files in os.walk(working_directory):
-                        dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ['node_modules', '__pycache__', 'venv']]
-                        for file in files:
-                            if not file.startswith('.') and not file.endswith(('.pyc', '.tmp')):
-                                file_path = os.path.join(root, file)
-                                absolute_path = os.path.abspath(file_path)
+                generated_files = []
+                for absolute_path in sorted(_collect_generated_files(working_directory)):
+                    if seen_files is None or absolute_path not in seen_files:
+                        generated_files.append(absolute_path)
+                        if seen_files is not None:
+                            seen_files.add(absolute_path)
 
-                                # Only add if not seen before (or if we're not tracking seen files)
-                                if seen_files is None or absolute_path not in seen_files:
-                                    generated_files.append(absolute_path)
-                                    if seen_files is not None:
-                                        seen_files.add(absolute_path)
-
-                    if generated_files:
-                        context_parts.append("Generated Files from Previous Task:")
-                        for file_path in sorted(generated_files):
-                            context_parts.append(f"  - {file_path}")
+                if generated_files:
+                    context_parts.append("Generated Files from Previous Task:")
+                    for file_path in generated_files:
+                        context_parts.append(f"  - {file_path}")
             except Exception as e:
                 logger.warning(f"Failed to collect generated files: {e}")
 
@@ -129,21 +152,12 @@ def collect_previous_task_context(working_directory: str, previous_task_content:
 
     # Collect generated files from working directory
     try:
-        if os.path.exists(working_directory):
-            generated_files = []
-            for root, dirs, files in os.walk(working_directory):
-                dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ['node_modules', '__pycache__', 'venv']]
-                for file in files:
-                    if not file.startswith('.') and not file.endswith(('.pyc', '.tmp')):
-                        file_path = os.path.join(root, file)
-                        absolute_path = os.path.abspath(file_path)
-                        generated_files.append(absolute_path)
-
-            if generated_files:
-                context_parts.append("Generated Files from Previous Task:")
-                for file_path in sorted(generated_files):
-                    context_parts.append(f"  - {file_path}")
-                context_parts.append("")
+        generated_files = sorted(_collect_generated_files(working_directory))
+        if generated_files:
+            context_parts.append("Generated Files from Previous Task:")
+            for file_path in generated_files:
+                context_parts.append(f"  - {file_path}")
+            context_parts.append("")
     except Exception as e:
         logger.warning(f"Failed to collect generated files: {e}")
 
@@ -206,14 +220,7 @@ def build_conversation_context(task_lock: TaskLock, header: str = "=== CONVERSAT
             all_generated_files = set()  # Use set to avoid duplicates
             for working_directory in working_directories:
                 try:
-                    if os.path.exists(working_directory):
-                        for root, dirs, files in os.walk(working_directory):
-                            dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ['node_modules', '__pycache__', 'venv']]
-                            for file in files:
-                                if not file.startswith('.') and not file.endswith(('.pyc', '.tmp')):
-                                    file_path = os.path.join(root, file)
-                                    absolute_path = os.path.abspath(file_path)
-                                    all_generated_files.add(absolute_path)
+                    all_generated_files.update(_collect_generated_files(working_directory))
                 except Exception as e:
                     logger.warning(f"Failed to collect generated files from {working_directory}: {e}")
 
@@ -294,11 +301,10 @@ async def step_solve(options: Chat, request: Request, task_lock: TaskLock):
             else:
                 logger.info(f"[LIFECYCLE] Workforce is None, no need to stop")
             task_lock.status = Status.done
-            try:
-                await delete_task_lock(task_lock.id)
-                logger.info(f"[LIFECYCLE] Task lock deleted after client disconnect")
-            except Exception as e:
-                logger.error(f"Error deleting task lock on disconnect: {e}")
+            # Keep the lock so in-flight improve / human-reply / skip-task
+            # requests do not fail with "Task not found" on a brief SSE drop.
+            # Stale locks are reclaimed by _periodic_cleanup().
+            logger.info(f"[LIFECYCLE] Client disconnected; keeping task lock {task_lock.id} for reconnect")
             logger.info(f"[LIFECYCLE] Breaking out of step_solve loop due to client disconnect")
             break
         try:
@@ -672,6 +678,13 @@ async def step_solve(options: Chat, request: Request, task_lock: TaskLock):
                         workforce.resume()
                         continue
                 else:
+                    logger.error(
+                        "Cannot start task: workforce is not initialized",
+                        extra={"project_id": options.project_id, "task_id": options.task_id},
+                    )
+                    yield sse_json("error", {
+                        "message": "Workforce not initialized. Please re-send your question."
+                    })
                     continue
 
                 task_lock.status = Status.processing

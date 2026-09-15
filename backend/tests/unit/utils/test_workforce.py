@@ -59,6 +59,24 @@ class TestWorkforce:
             assert task.state == TaskState.OPEN
             assert task in workforce._pending_tasks
 
+    @pytest.mark.asyncio
+    async def test_handle_decompose_append_task_keeps_parent_open(self):
+        """Decomposition must not mark the parent task FAILED before workers run."""
+        workforce = Workforce(
+            api_task_id="test_api_task_123",
+            description="Test workforce"
+        )
+        task = Task(content="Research three topics", id="main_task")
+        subtask = Task(content="Research topic A", id="subtask_1")
+
+        with patch.object(workforce, 'reset'), \
+             patch.object(workforce, '_decompose_task', return_value=[subtask]), \
+             patch('app.utils.workforce.validate_task_content', return_value=True):
+            result = await workforce.handle_decompose_append_task(task, reset=True)
+
+        assert result == [subtask]
+        assert task.state == TaskState.OPEN
+
     def test_eigent_make_sub_tasks_with_streaming_decomposition(self):
         """Test eigent_make_sub_tasks with streaming decomposition result."""
         api_task_id = "test_api_task_123"

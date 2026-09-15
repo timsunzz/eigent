@@ -87,19 +87,24 @@ def exa_search(search: ExaSearch, key: Key = Depends(key_must)):
 
 @router.get("/google")
 @traceroot.trace()
-def google_search(query: str, search_type: str = "web", key: Key = Depends(key_must)):
+def google_search(
+    query: str,
+    search_type: str = "web",
+    number_of_result_pages: int = 10,
+    start_page: int = 1,
+    key: Key = Depends(key_must),
+):
     """Search using Google Custom Search API."""
     # https://developers.google.com/custom-search/v1/overview
     GOOGLE_API_KEY = env_not_empty("GOOGLE_API_KEY")
     # https://cse.google.com/cse/all
     SEARCH_ENGINE_ID = env_not_empty("SEARCH_ENGINE_ID")
 
-    # Using the first page
-    start_page_idx = 1
+    start_page_idx = max(1, start_page)
     # Different language may get different result
     search_language = "en"
-    # How many pages to return
-    num_result_pages = 10
+    # How many pages to return (Google CSE allows 1-10 per request)
+    num_result_pages = min(max(1, number_of_result_pages), 10)
     
     # Constructing the URL
     # Doc: https://developers.google.com/custom-search/v1/using_rest
