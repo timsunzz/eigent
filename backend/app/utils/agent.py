@@ -463,7 +463,7 @@ class ListenChatAgent(ChatAgent):
         return self._record_tool_calling(
             func_name, args, result, tool_call_id,
             mask_output=mask_flag,
-            extra_content=tool_call_request.extra_content,
+            extra_content=getattr(tool_call_request, "extra_content", None),
         )
 
     @traceroot.trace()
@@ -595,7 +595,7 @@ class ListenChatAgent(ChatAgent):
         )
         return self._record_tool_calling(
             func_name, args, result, tool_call_id,
-            extra_content=tool_call_request.extra_content,
+            extra_content=getattr(tool_call_request, "extra_content", None),
         )
 
     @traceroot.trace()

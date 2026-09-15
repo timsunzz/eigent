@@ -905,7 +905,7 @@ class TestChatServiceErrorCases:
         # Create a test file
         (temp_dir / "test.txt").write_text("test content")
         
-        with patch('os.path.relpath', side_effect=ValueError("Invalid path")):
+        with patch('app.service.chat_service._collect_generated_files', side_effect=ValueError("Invalid path")):
             with patch('app.service.chat_service.logger') as mock_logger:
                 result = collect_previous_task_context(
                     working_directory=working_directory,

@@ -147,10 +147,11 @@ describe('useInstallationSetup Hook', () => {
 
       // Get the registered callback
       const completeCallback = electronAPI.onInstallDependenciesComplete.mock.calls[0][0]
-      const completeData = { success: true }
+      const readyCallback = electronAPI.onBackendReady.mock.calls[0][0]
       
       act(() => {
-        completeCallback(completeData)
+        completeCallback({ success: true })
+        readyCallback({ success: true, port: 8000 })
       })
 
       expect(mockInstallationStore.setSuccess).toHaveBeenCalled()
@@ -267,9 +268,15 @@ describe('useInstallationSetup Hook', () => {
         expect(mockInstallationStore.startInstallation).toHaveBeenCalled()
       })
 
-      // Should receive logs and completion
       await vi.waitFor(() => {
         expect(mockInstallationStore.addLog).toHaveBeenCalled()
+      })
+
+      act(() => {
+        electronAPI.onBackendReady.mock.calls[0][0]({ success: true, port: 8000 })
+      })
+
+      await vi.waitFor(() => {
         expect(mockInstallationStore.setSuccess).toHaveBeenCalled()
       })
     })

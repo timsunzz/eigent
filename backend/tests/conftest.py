@@ -345,6 +345,7 @@ pytest_plugins = ["pytest_asyncio"]
 
 def pytest_configure(config):
     """Configure pytest markers."""
+    os.environ.setdefault("OPENAI_API_KEY", "test-key-for-unit-tests")
     config.addinivalue_line(
         "markers", "model_backend: mark test as requiring model backend"
     )

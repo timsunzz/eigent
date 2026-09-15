@@ -162,6 +162,7 @@ def collect_previous_task_context(working_directory: str, previous_task_content:
         logger.warning(f"Failed to collect generated files: {e}")
 
     context_parts.append("=== END OF PREVIOUS TASK CONTEXT ===\n")
+    context_parts.append("=== NEW TASK ===")
 
     return "\n".join(context_parts)
 
@@ -205,16 +206,18 @@ def build_conversation_context(task_lock: TaskLock, header: str = "=== CONVERSAT
         context = f"{header}\n"
 
         for entry in task_lock.conversation_history:
-            if entry['role'] == 'task_result':
-                if isinstance(entry['content'], dict):
-                    formatted_context = format_task_context(entry['content'], skip_files=True)
+            role = entry.get('role')
+            content = entry.get('content')
+            if role == 'task_result':
+                if isinstance(content, dict):
+                    formatted_context = format_task_context(content, skip_files=True)
                     context += formatted_context + "\n\n"
-                    if entry['content'].get('working_directory'):
-                        working_directories.add(entry['content']['working_directory'])
+                    if content.get('working_directory'):
+                        working_directories.add(content['working_directory'])
                 else:
-                    context += entry['content'] + "\n"
-            elif entry['role'] == 'assistant':
-                context += f"Assistant: {entry['content']}\n\n"
+                    context += "[Previous Task Completed]\n"
+            else:
+                context += f"{role}: {content}\n"
 
         if working_directories:
             all_generated_files = set()  # Use set to avoid duplicates
@@ -236,8 +239,27 @@ def build_conversation_context(task_lock: TaskLock, header: str = "=== CONVERSAT
 
 
 def build_context_for_workforce(task_lock: TaskLock, options: Chat) -> str:
-    """Build context information for workforce."""
-    return build_conversation_context(task_lock, header="=== CONVERSATION HISTORY ===")
+    """Build conversation history plus the last completed-task digest."""
+    conversation = build_conversation_context(task_lock, header="=== CONVERSATION HISTORY ===")
+    last_result = getattr(task_lock, "last_task_result", None) or ""
+    last_summary = getattr(task_lock, "last_task_summary", None) or ""
+    if not conversation and not last_result and not last_summary:
+        return ""
+
+    parts = []
+    if conversation:
+        parts.append(conversation.rstrip() + "\n")
+    if last_result or last_summary:
+        working_directory = options.file_save_path()
+        parts.append(
+            collect_previous_task_context(
+                working_directory,
+                previous_task_content="",
+                previous_task_result=last_result,
+                previous_summary=last_summary,
+            )
+        )
+    return "\n".join(parts)
 
 
 @sync_step
