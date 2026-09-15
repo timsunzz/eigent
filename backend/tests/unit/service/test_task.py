@@ -257,6 +257,21 @@ class TestTaskLock:
         assert response == "late reply"
 
     @pytest.mark.asyncio
+    async def test_get_human_input_creates_missing_queue(self):
+        """Agents that listen after a reply is requested should still have a queue."""
+        task_id = "task_get_human_missing"
+        task_lock = TaskLock(id=task_id, queue=asyncio.Queue(), human_input={})
+        task_locks[task_id] = task_lock
+
+        waiter = asyncio.create_task(task_lock.get_human_input("ghost"))
+        await asyncio.sleep(0)
+        assert "ghost" in task_lock.human_input
+        await task_lock.put_human_input("ghost", "hello")
+        assert await waiter == "hello"
+
+        del task_locks[task_id]
+
+    @pytest.mark.asyncio
     async def test_task_lock_background_task_management(self):
         """Test background task management."""
         task_lock = TaskLock("test_123", asyncio.Queue(), {})

@@ -323,6 +323,12 @@ class TaskLock:
 
     async def get_human_input(self, agent: str):
         logger.debug("Getting human input", extra={"task_id": self.id, "agent": agent})
+        if agent not in self.human_input:
+            logger.warning(
+                "Human input queue missing, creating one",
+                extra={"task_id": self.id, "agent": agent},
+            )
+            self.human_input[agent] = asyncio.Queue(1)
         return await self.human_input[agent].get()
 
     def add_human_input_listen(self, agent: str):

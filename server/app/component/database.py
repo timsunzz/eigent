@@ -1,19 +1,22 @@
 from sqlmodel import Session, create_engine
-from app.component.environment import env, env_or_fail
+from app.component.environment import env, env_or_fail, normalize_database_url
 from utils import traceroot_wrapper as traceroot
 
 logger = traceroot.get_logger("database")
 
+database_url = normalize_database_url(env_or_fail("database_url"))
+pool_size = int(env("DB_POOL_SIZE", "10"))
+
 logger.info("Initializing database engine", extra={
-    "database_url_prefix": env_or_fail("database_url")[:20] + "...",
+    "database_url_prefix": database_url[:20] + "...",
     "debug_mode": env("debug") == "on",
-    "pool_size": 36
+    "pool_size": pool_size
 })
 
 engine = create_engine(
-    env_or_fail("database_url"),
+    database_url,
     echo=True if env("debug") == "on" else False,
-    pool_size=36,
+    pool_size=pool_size,
 )
 
 logger.info("Database engine initialized successfully")

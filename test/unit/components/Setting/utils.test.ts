@@ -1,5 +1,23 @@
 import { describe, it, expect } from 'vitest';
-import { parseArgsToArray, arrayToArgsJson } from '../../../../src/pages/Setting/components/utils';
+import { parseArgsToArray, arrayToArgsJson, isProviderConfigured } from '../../../../src/pages/Setting/components/utils';
+
+describe('isProviderConfigured', () => {
+  it('treats boolean is_valid as configured', () => {
+    expect(isProviderConfigured({ is_valid: true })).toBe(true);
+    expect(isProviderConfigured({ is_valid: false })).toBe(false);
+  });
+
+  it('treats misspelled is_vaild enum as configured', () => {
+    expect(isProviderConfigured({ is_vaild: 2 })).toBe(true);
+    expect(isProviderConfigured({ is_vaild: 'is_valid' })).toBe(true);
+    expect(isProviderConfigured({ is_vaild: 1 })).toBe(false);
+  });
+
+  it('returns false for empty provider', () => {
+    expect(isProviderConfigured(null)).toBe(false);
+    expect(isProviderConfigured({})).toBe(false);
+  });
+});
 
 describe('parseArgsToArray', () => {
   it('should parse JSON array string to array', () => {

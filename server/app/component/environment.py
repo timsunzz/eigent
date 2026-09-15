@@ -27,9 +27,22 @@ def env(key: str, default: Any) -> Any: ...
 
 
 def env(key: str, default=None):
-    value = os.getenv(key, default)
+    value = os.getenv(key)
+    if value is None and key.upper() != key:
+        value = os.getenv(key.upper())
+    if value is None and key.lower() != key:
+        value = os.getenv(key.lower())
+    if value is None:
+        value = default
     logger.debug("Environment variable accessed", extra={"key": key, "has_value": value is not None, "using_default": value == default})
     return value
+
+
+def normalize_database_url(url: str) -> str:
+    """SQLAlchemy 2 requires postgresql:// rather than postgres://."""
+    if url.startswith("postgres://"):
+        return "postgresql://" + url[len("postgres://") :]
+    return url
 
 
 def env_or_fail(key: str):

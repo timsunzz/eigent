@@ -10,7 +10,11 @@ if str(_project_root) not in sys.path:
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 from sqlmodel import SQLModel
-from app.component.environment import auto_import, env_not_empty
+from app.component.environment import auto_import, env_not_empty, normalize_database_url
+
+
+def _alembic_database_url() -> str:
+    return normalize_database_url(env_not_empty("database_url"))
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -111,7 +115,7 @@ def run_migrations_online() -> None:
 
     """
     options = config.get_section(config.config_ini_section, {})
-    options["sqlalchemy.url"] = env_not_empty("database_url")
+    options["sqlalchemy.url"] = _alembic_database_url()
     connectable = engine_from_config(
         options,
         prefix="sqlalchemy.",

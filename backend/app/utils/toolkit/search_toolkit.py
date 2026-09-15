@@ -3,6 +3,7 @@ from camel.toolkits import SearchToolkit as BaseSearchToolkit
 from camel.toolkits.function_tool import FunctionTool
 import httpx
 import os
+import threading
 from app.component.environment import env, env_not_empty
 from app.service.task import Agents
 from app.utils.listen.toolkit_listen import auto_listen_toolkit, listen_toolkit
@@ -10,6 +11,7 @@ from app.utils.toolkit.abstract_toolkit import AbstractToolkit
 from utils import traceroot_wrapper as traceroot
 
 logger = traceroot.get_logger("search_toolkit")
+_GOOGLE_SEARCH_ENV_LOCK = threading.Lock()
 
 
 @auto_listen_toolkit(BaseSearchToolkit)
@@ -95,29 +97,39 @@ class SearchToolkit(BaseSearchToolkit, AbstractToolkit):
         # If user has configured their own Google API keys, use them
         if self._user_google_api_key and self._user_search_engine_id:
             logger.info("Using user-configured Google Search API")
-            # Temporarily set environment variables for this search
-            old_google_key = os.environ.get("GOOGLE_API_KEY")
-            old_search_id = os.environ.get("SEARCH_ENGINE_ID")
+            with _GOOGLE_SEARCH_ENV_LOCK:
+                old_google_key = os.environ.get("GOOGLE_API_KEY")
+                old_search_id = os.environ.get("SEARCH_ENGINE_ID")
+                try:
+                    os.environ["GOOGLE_API_KEY"] = self._user_google_api_key
+                    os.environ["SEARCH_ENGINE_ID"] = self._user_search_engine_id
+                    return super().search_google(query, search_type, number_of_result_pages, start_page)
+                finally:
+                    if old_google_key is not None:
+                        os.environ["GOOGLE_API_KEY"] = old_google_key
+                    elif "GOOGLE_API_KEY" in os.environ:
+                        del os.environ["GOOGLE_API_KEY"]
 
-            try:
-                os.environ["GOOGLE_API_KEY"] = self._user_google_api_key
-                os.environ["SEARCH_ENGINE_ID"] = self._user_search_engine_id
-                return super().search_google(query, search_type, number_of_result_pages, start_page)
-            finally:
-                # Restore original environment variables
-                if old_google_key is not None:
-                    os.environ["GOOGLE_API_KEY"] = old_google_key
-                elif "GOOGLE_API_KEY" in os.environ:
-                    del os.environ["GOOGLE_API_KEY"]
+                    if old_search_id is not None:
+                        os.environ["SEARCH_ENGINE_ID"] = old_search_id
+                    elif "SEARCH_ENGINE_ID" in os.environ:
+                        del os.environ["SEARCH_ENGINE_ID"]
 
-                if old_search_id is not None:
-                    os.environ["SEARCH_ENGINE_ID"] = old_search_id
-                elif "SEARCH_ENGINE_ID" in os.environ:
-                    del os.environ["SEARCH_ENGINE_ID"]
-        else:
-            # Fallback to cloud search
+        if env("cloud_api_key"):
             logger.info("Using cloud Google Search (no user configuration found)")
             return self.cloud_search_google(query, search_type, number_of_result_pages, start_page)
+
+        logger.warning("search_google called without Google or cloud credentials")
+        return [
+            {
+                "error": (
+                    "search_google is not configured. Add GOOGLE_API_KEY and "
+                    "SEARCH_ENGINE_ID in Settings, or sign in so the cloud "
+                    "search proxy can be used. Use browser tools to search "
+                    "the web in the meantime."
+                )
+            }
+        ]
 
     def cloud_search_google(
         self,
@@ -352,8 +364,10 @@ class SearchToolkit(BaseSearchToolkit, AbstractToolkit):
         # if env("BRAVE_API_KEY"):
         #     tools.append(FunctionTool(search_toolkit.search_brave))
 
-        if (env("GOOGLE_API_KEY") and env("SEARCH_ENGINE_ID")) or env("cloud_api_key"):
-            tools.append(FunctionTool(search_toolkit.search_google))
+        # Always expose search_google so parallel workers do not KeyError
+        # when the model calls it. The method itself reports a clear
+        # error if neither user keys nor a cloud API key are configured.
+        tools.append(FunctionTool(search_toolkit.search_google))
 
         # if env("TAVILY_API_KEY"):
         #     tools.append(FunctionTool(search_toolkit.tavily_search))
