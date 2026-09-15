@@ -30,6 +30,29 @@ class User(AbstractModel, DefaultTimes, table=True):
     inviter_user_id: int | None = Field(default=None, foreign_key="user.id", description="Inviter user ID")
     status: Status = Field(default=Status.Normal.value, sa_column=Column(ChoiceType(Status, SmallInteger())))
 
+    def refresh_credits_on_active(self, session) -> None:
+        """Keep GET /user working on local/cloud self-host.
+
+        Cloud-hosted Eigent grants daily/monthly credits here. This open-source
+        server stores the stamp so the profile endpoint does not 500; credit
+        grants remain a no-op unless a billing plan is configured later.
+        """
+        today = date.today()
+        month_start = today.replace(day=1)
+        changed = False
+        if self.last_daily_credit_date != today:
+            self.last_daily_credit_date = today
+            changed = True
+        if self.last_monthly_credit_date != month_start:
+            self.last_monthly_credit_date = month_start
+            changed = True
+        if changed:
+            try:
+                self.save(session)
+            except Exception:
+                if hasattr(session, "rollback"):
+                    session.rollback()
+
 
 class UserProfile(BaseModel):
     fullname: str = ""
