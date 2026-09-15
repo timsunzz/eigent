@@ -1,5 +1,5 @@
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import Response
@@ -21,7 +21,8 @@ class TestChatController:
         """Test successful chat initialization."""
         chat_data = Chat(**sample_chat_data)
         
-        with patch("app.controller.chat_controller.create_task_lock", return_value=mock_task_lock), \
+        with patch("app.controller.chat_controller.get_or_create_task_lock", return_value=mock_task_lock), \
+             patch("app.controller.chat_controller.set_current_task_id"), \
              patch("app.controller.chat_controller.step_solve") as mock_step_solve, \
              patch("app.controller.chat_controller.load_dotenv"), \
              patch("pathlib.Path.mkdir"), \
@@ -45,7 +46,8 @@ class TestChatController:
         """Test that environment variables are properly set."""
         chat_data = Chat(**sample_chat_data)
         
-        with patch("app.controller.chat_controller.create_task_lock", return_value=mock_task_lock), \
+        with patch("app.controller.chat_controller.get_or_create_task_lock", return_value=mock_task_lock), \
+             patch("app.controller.chat_controller.set_current_task_id"), \
              patch("app.controller.chat_controller.step_solve") as mock_step_solve, \
              patch("app.controller.chat_controller.load_dotenv"), \
              patch("pathlib.Path.mkdir"), \
@@ -108,7 +110,8 @@ class TestChatController:
             assert response.status_code == 201
             mock_task_lock.put_queue.assert_called_once()
 
-    def test_supplement_chat_task_not_done_error(self, mock_task_lock):
+    @pytest.mark.asyncio
+    async def test_supplement_chat_task_not_done_error(self, mock_task_lock):
         """Test supplementation fails when task is not done."""
         task_id = "test_task_123"
         supplement_data = SupplementChat(question="Add more details")
@@ -116,7 +119,7 @@ class TestChatController:
         
         with patch("app.controller.chat_controller.get_task_lock", return_value=mock_task_lock):
             with pytest.raises(UserException):
-                supplement(task_id, supplement_data)
+                await supplement(task_id, supplement_data)
 
     @pytest.mark.asyncio
     async def test_stop_chat_success(self, mock_task_lock):
@@ -163,13 +166,15 @@ class TestChatControllerIntegration:
     
     def test_chat_endpoint_integration(self, client: TestClient, sample_chat_data):
         """Test chat endpoint through FastAPI test client."""
-        with patch("app.controller.chat_controller.create_task_lock") as mock_create_lock, \
+        with patch("app.controller.chat_controller.get_or_create_task_lock") as mock_create_lock, \
+             patch("app.controller.chat_controller.set_current_task_id"), \
              patch("app.controller.chat_controller.step_solve") as mock_step_solve, \
              patch("app.controller.chat_controller.load_dotenv"), \
              patch("pathlib.Path.mkdir"), \
              patch("pathlib.Path.home", return_value=MagicMock()):
             
             mock_task_lock = MagicMock()
+            mock_task_lock.put_queue = AsyncMock()
             mock_create_lock.return_value = mock_task_lock
             
             async def mock_generator():
@@ -187,11 +192,10 @@ class TestChatControllerIntegration:
         task_id = "test_task_123"
         supplement_data = {"question": "Improve this code"}
         
-        with patch("app.controller.chat_controller.get_task_lock") as mock_get_lock, \
-             patch("asyncio.run"):
-            
+        with patch("app.controller.chat_controller.get_task_lock") as mock_get_lock:
             mock_task_lock = MagicMock()
             mock_task_lock.status = Status.processing
+            mock_task_lock.put_queue = AsyncMock()
             mock_get_lock.return_value = mock_task_lock
             
             response = client.post(f"/chat/{task_id}", json=supplement_data)
@@ -203,11 +207,10 @@ class TestChatControllerIntegration:
         task_id = "test_task_123"
         supplement_data = {"question": "Add more details"}
         
-        with patch("app.controller.chat_controller.get_task_lock") as mock_get_lock, \
-             patch("asyncio.run"):
-            
+        with patch("app.controller.chat_controller.get_task_lock") as mock_get_lock:
             mock_task_lock = MagicMock()
             mock_task_lock.status = Status.done
+            mock_task_lock.put_queue = AsyncMock()
             mock_get_lock.return_value = mock_task_lock
             
             response = client.put(f"/chat/{task_id}", json=supplement_data)
@@ -218,10 +221,9 @@ class TestChatControllerIntegration:
         """Test stop chat endpoint through FastAPI test client."""
         task_id = "test_task_123"
         
-        with patch("app.controller.chat_controller.get_task_lock") as mock_get_lock, \
-             patch("asyncio.run"):
-            
+        with patch("app.controller.chat_controller.get_task_lock") as mock_get_lock:
             mock_task_lock = MagicMock()
+            mock_task_lock.put_queue = AsyncMock()
             mock_get_lock.return_value = mock_task_lock
             
             response = client.delete(f"/chat/{task_id}")
@@ -233,10 +235,9 @@ class TestChatControllerIntegration:
         task_id = "test_task_123"
         reply_data = {"agent": "test_agent", "reply": "This is my reply"}
         
-        with patch("app.controller.chat_controller.get_task_lock") as mock_get_lock, \
-             patch("asyncio.run"):
-            
+        with patch("app.controller.chat_controller.get_task_lock") as mock_get_lock:
             mock_task_lock = MagicMock()
+            mock_task_lock.put_human_input = AsyncMock()
             mock_get_lock.return_value = mock_task_lock
             
             response = client.post(f"/chat/{task_id}/human-reply", json=reply_data)
@@ -248,10 +249,9 @@ class TestChatControllerIntegration:
         task_id = "test_task_123"
         mcp_data = {"mcpServers": {"test_server": {"config": "test"}}}
         
-        with patch("app.controller.chat_controller.get_task_lock") as mock_get_lock, \
-             patch("asyncio.run"):
-            
+        with patch("app.controller.chat_controller.get_task_lock") as mock_get_lock:
             mock_task_lock = MagicMock()
+            mock_task_lock.put_queue = AsyncMock()
             mock_get_lock.return_value = mock_task_lock
             
             response = client.post(f"/chat/{task_id}/install-mcp", json=mcp_data)
@@ -333,7 +333,7 @@ class TestChatControllerErrorCases:
         """Test chat endpoint when environment setup fails."""
         chat_data = Chat(**sample_chat_data)
         
-        with patch("app.controller.chat_controller.create_task_lock") as mock_create_lock, \
+        with patch("app.controller.chat_controller.get_or_create_task_lock") as mock_create_lock, \
              patch("app.controller.chat_controller.load_dotenv", side_effect=Exception("Env load failed")), \
              patch("pathlib.Path.mkdir", side_effect=Exception("Directory creation failed")):
             

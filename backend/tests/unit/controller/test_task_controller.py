@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import Response
 from fastapi.testclient import TestClient
@@ -139,10 +139,9 @@ class TestTaskControllerIntegration:
         """Test start task endpoint through FastAPI test client."""
         task_id = "test_task_123"
         
-        with patch("app.controller.task_controller.get_task_lock") as mock_get_lock, \
-             patch("asyncio.run"):
-            
+        with patch("app.controller.task_controller.get_task_lock") as mock_get_lock:
             mock_task_lock = MagicMock()
+            mock_task_lock.put_queue = AsyncMock()
             mock_get_lock.return_value = mock_task_lock
             
             response = client.post(f"/task/{task_id}/start")
@@ -159,10 +158,9 @@ class TestTaskControllerIntegration:
             ]
         }
         
-        with patch("app.controller.task_controller.get_task_lock") as mock_get_lock, \
-             patch("asyncio.run"):
-            
+        with patch("app.controller.task_controller.get_task_lock") as mock_get_lock:
             mock_task_lock = MagicMock()
+            mock_task_lock.put_queue = AsyncMock()
             mock_get_lock.return_value = mock_task_lock
             
             response = client.put(f"/task/{task_id}", json=update_data)
@@ -174,10 +172,9 @@ class TestTaskControllerIntegration:
         task_id = "test_task_123"
         control_data = {"action": "pause"}
         
-        with patch("app.controller.task_controller.get_task_lock") as mock_get_lock, \
-             patch("asyncio.run"):
-            
+        with patch("app.controller.task_controller.get_task_lock") as mock_get_lock:
             mock_task_lock = MagicMock()
+            mock_task_lock.put_queue = AsyncMock()
             mock_get_lock.return_value = mock_task_lock
             
             response = client.put(f"/task/{task_id}/take-control", json=control_data)
@@ -189,10 +186,9 @@ class TestTaskControllerIntegration:
         task_id = "test_task_123"
         control_data = {"action": "resume"}
         
-        with patch("app.controller.task_controller.get_task_lock") as mock_get_lock, \
-             patch("asyncio.run"):
-            
+        with patch("app.controller.task_controller.get_task_lock") as mock_get_lock:
             mock_task_lock = MagicMock()
+            mock_task_lock.put_queue = AsyncMock()
             mock_get_lock.return_value = mock_task_lock
             
             response = client.put(f"/task/{task_id}/take-control", json=control_data)
@@ -211,10 +207,10 @@ class TestTaskControllerIntegration:
         }
         
         with patch("app.controller.task_controller.get_task_lock") as mock_get_lock, \
-             patch("app.controller.task_controller.load_dotenv"), \
-             patch("asyncio.run"):
+             patch("app.controller.task_controller.load_dotenv"):
             
             mock_task_lock = MagicMock()
+            mock_task_lock.put_queue = AsyncMock()
             mock_get_lock.return_value = mock_task_lock
             
             response = client.post(f"/task/{task_id}/add-agent", json=agent_data)
