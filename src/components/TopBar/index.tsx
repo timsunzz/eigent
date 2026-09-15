@@ -56,7 +56,7 @@ function HeaderWin() {
 	const { token } = getAuthStore();
 	const [endDialogOpen, setEndDialogOpen] = useState(false);
 	useEffect(() => {
-		const p = window.electronAPI.getPlatform();
+		const p = window.electronAPI?.getPlatform?.() ?? "";
 		setPlatform(p);
 
 		if (platform === "darwin") {

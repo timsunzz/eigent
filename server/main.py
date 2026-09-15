@@ -12,6 +12,10 @@ from app import api
 from app.component.environment import auto_include_routers, env
 from fastapi.staticfiles import StaticFiles
 
+# Register exception handlers and i18n middleware (side-effect imports).
+import app.exception.handler  # noqa: F401
+import app.middleware  # noqa: F401
+
 # Only initialize traceroot if enabled
 if traceroot.is_enabled():
     from traceroot.integrations.fastapi import connect_fastapi

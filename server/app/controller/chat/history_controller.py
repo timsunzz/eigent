@@ -4,6 +4,7 @@ from fastapi_pagination.ext.sqlmodel import paginate
 from app.model.chat.chat_history import ChatHistoryOut, ChatHistoryIn, ChatHistory, ChatHistoryUpdate, ChatStatus
 from app.model.chat.chat_history_grouped import ProjectGroup, GroupedHistoryResponse
 from fastapi_babel import _
+from sqlalchemy import or_
 from sqlmodel import Session, select, desc, case
 from app.component.auth import Auth, auth_must
 from app.component.database import session
@@ -94,6 +95,7 @@ def list_grouped_chat_history(
         'tasks': [],
         'total_completed_tasks': 0,
         'total_ongoing_tasks': 0,
+        'total_failed_tasks': 0,
         'average_tokens_per_task': 0
     })
     
@@ -164,7 +166,7 @@ def list_grouped_chat_history(
 
 @router.delete("/history/{history_id}", name="delete chat history")
 @traceroot.trace()
-def delete_chat_history(history_id: str, session: Session = Depends(session), auth: Auth = Depends(auth_must)):
+def delete_chat_history(history_id: int, session: Session = Depends(session), auth: Auth = Depends(auth_must)):
     """Delete chat history."""
     user_id = auth.user.id
     history = session.exec(select(ChatHistory).where(ChatHistory.id == history_id)).first()
@@ -260,4 +262,41 @@ def update_project_name(
     except Exception as e:
         session.rollback()
         logger.error("Project name update failed", extra={"user_id": user_id, "project_id": project_id, "error": str(e)}, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.delete("/project/{project_id}", name="delete project histories")
+@traceroot.trace()
+def delete_project_histories(project_id: str, session: Session = Depends(session), auth: Auth = Depends(auth_must)):
+    """Delete every chat history row that belongs to a project."""
+    user_id = auth.user.id
+
+    stmt = select(ChatHistory).where(
+        ChatHistory.user_id == user_id,
+        or_(ChatHistory.project_id == project_id, ChatHistory.task_id == project_id),
+    )
+    histories = session.exec(stmt).all()
+
+    if not histories:
+        logger.warning("No histories found for project delete", extra={"user_id": user_id, "project_id": project_id})
+        raise HTTPException(status_code=404, detail="Project not found or access denied")
+
+    try:
+        deleted_ids = []
+        for history in histories:
+            deleted_ids.append(history.id)
+            session.delete(history)
+        session.commit()
+        logger.info(
+            "Project histories deleted",
+            extra={"user_id": user_id, "project_id": project_id, "deleted_count": len(deleted_ids)},
+        )
+        return {"status": "success", "deleted_count": len(deleted_ids)}
+    except Exception as e:
+        session.rollback()
+        logger.error(
+            "Project deletion failed",
+            extra={"user_id": user_id, "project_id": project_id, "error": str(e)},
+            exc_info=True,
+        )
         raise HTTPException(status_code=500, detail="Internal server error")

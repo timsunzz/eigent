@@ -20,7 +20,7 @@ const HAS_STACK_KEYS = hasStackKeys();
 let lock = false;
 export default function Login() {
 	const app = HAS_STACK_KEYS ? useStackApp() : null;
-	const { setAuth, setModelType, setLocalProxyValue } = useAuthStore();
+	const { setAuth, setModelType, setLocalProxyValue, setInitState } = useAuthStore();
 	const navigate = useNavigate();
 	const location = useLocation();
 	const [hidePassword, setHidePassword] = useState(true);
@@ -57,7 +57,7 @@ export default function Login() {
 
 		if (!formData.password) {
 			newErrors.password = t("layout.please-enter-password");
-		} else if (formData.password.length < 6) {
+		} else if (formData.password.length < 8) {
 			newErrors.password = t("layout.password-must-be-at-least-8-characters");
 		}
 
@@ -133,7 +133,12 @@ export default function Login() {
 			}
 
 			setAuth({ email: formData.email, ...data });
-			setModelType('cloud');
+			if (import.meta.env.VITE_USE_LOCAL_PROXY === "true") {
+				setModelType("local");
+				setInitState("done");
+			} else {
+				setModelType("cloud");
+			}
 			// Record VITE_USE_LOCAL_PROXY value at login
 			const localProxyValue = import.meta.env.VITE_USE_LOCAL_PROXY || null;
 			setLocalProxyValue(localProxyValue);
@@ -158,7 +163,12 @@ export default function Login() {
 				return;
 			}
 			console.log("data", data);
-			setModelType('cloud');
+			if (import.meta.env.VITE_USE_LOCAL_PROXY === "true") {
+				setModelType("local");
+				setInitState("done");
+			} else {
+				setModelType("cloud");
+			}
 			setAuth({ email: formData.email, ...data });
 			// Record VITE_USE_LOCAL_PROXY value at login
 			const localProxyValue = import.meta.env.VITE_USE_LOCAL_PROXY || null;
@@ -252,13 +262,13 @@ export default function Login() {
 	}, []);
 
 	useEffect(() => {
-		const p = window.electronAPI.getPlatform();
+		const p = window.electronAPI?.getPlatform?.() ?? "";
 		setPlatform(p);
 
-		if (platform === "darwin") {
+		if (p === "darwin") {
 			titlebarRef.current?.classList.add("mac");
 		}
-	}, [platform]);
+	}, []);
 
 	// Handle before-close event for login page
 	useEffect(() => {

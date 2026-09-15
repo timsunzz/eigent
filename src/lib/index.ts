@@ -1,5 +1,16 @@
 import { getAuthStore } from "@/store/authStore"
 
+export function isElectronRuntime(): boolean {
+	return typeof window !== "undefined" && !!window.electronAPI
+}
+
+export function getElectronPlatform(): string {
+	if (typeof window === "undefined") {
+		return ""
+	}
+	return window.electronAPI?.getPlatform?.() ?? ""
+}
+
 export function getProxyBaseURL() {
 	const isDev = import.meta.env.DEV
 

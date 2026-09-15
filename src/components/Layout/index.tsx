@@ -39,19 +39,23 @@ const Layout = () => {
 	useInstallationSetup();
 
 	useEffect(() => {
+		if (!window.ipcRenderer) {
+			return;
+		}
+
 		const handleBeforeClose = () => {
 			const currentStatus = chatStore.tasks[chatStore.activeTaskId as string]?.status;
 			if(["running", "pause"].includes(currentStatus)) {
 				setNoticeOpen(true);
 			} else {
-				window.electronAPI.closeWindow(true);
+				window.electronAPI?.closeWindow?.(true);
 			}
 		};
 
 		window.ipcRenderer.on("before-close", handleBeforeClose);
 
 		return () => {
-			window.ipcRenderer.removeAllListeners("before-close");
+			window.ipcRenderer?.removeAllListeners("before-close");
 		};
 	}, [chatStore.tasks, chatStore.activeTaskId]);
 

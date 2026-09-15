@@ -94,6 +94,7 @@ This setup includes:
 - Local model integration (vLLM, Ollama, LM Studio, etc.)
 - Complete isolation from cloud services
 - Zero external dependencies
+- Browser-only UI via `npm run dev:web` (no Electron required)
 
 ### ⚡ Quick Start (Cloud-Connected)
 

@@ -5,7 +5,7 @@ from app.component import code
 from fastapi.security import OAuth2PasswordBearer
 from app.component.database import session
 from app.component.environment import env, env_not_empty
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, timezone
 import jwt
 from jwt.exceptions import InvalidTokenError
 from app.model.mcp.proxy import ApiKey
@@ -37,7 +37,7 @@ class Auth:
         try:
             payload = jwt.decode(token, Auth.SECRET_KEY, algorithms=["HS256"])
             id = payload["id"]
-            if payload["exp"] < int(datetime.now().timestamp()):
+            if payload["exp"] < int(datetime.now(timezone.utc).timestamp()):
                 raise TokenException(code.token_expired, _("Validate credentials expired"))
         except InvalidTokenError:
             raise TokenException(code.token_invalid, _("Could not validate credentials"))
@@ -47,9 +47,9 @@ class Auth:
     def create_access_token(cls, user_id: int, expires_delta: timedelta | None = None):
         to_encode: dict = {"id": user_id}
         if expires_delta:
-            expire = datetime.now() + expires_delta
+            expire = datetime.now(timezone.utc) + expires_delta
         else:
-            expire = datetime.now() + timedelta(days=30)
+            expire = datetime.now(timezone.utc) + timedelta(days=30)
         to_encode.update({"exp": expire})
         encoded_jwt = jwt.encode(to_encode, Auth.SECRET_KEY, algorithm="HS256")
         return encoded_jwt
@@ -79,6 +79,8 @@ async def auth_must(
 ) -> Auth:
     model = Auth.decode_token(token)
     user = session.get(User, model.id)
+    if user is None:
+        raise TokenException(code.token_invalid, _("Could not validate credentials"))
     model._user = user
     return model
 

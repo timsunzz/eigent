@@ -16,6 +16,7 @@
     "compile-babel": "cd backend && uv run pybabel compile -d lang",
     "clean-cache": "rimraf node_modules/.vite",
     "dev": "npm run clean-cache && vite",
+    "dev:web": "npm run clean-cache && vite --mode web",
     "build": "npm run compile-babel && tsc && vite build &&  electron-builder -- --publish always",
     "build:mac": "npm run compile-babel && tsc && vite build && electron-builder --mac",
     "build:win": "npm run compile-babel && tsc && vite build && electron-builder --win",

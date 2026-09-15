@@ -84,7 +84,7 @@ interface ElectronAPI {
 
 declare global {
   interface Window {
-    ipcRenderer: IpcRenderer;
-    electronAPI: ElectronAPI;
+    ipcRenderer?: IpcRenderer;
+    electronAPI?: ElectronAPI;
   }
 } 

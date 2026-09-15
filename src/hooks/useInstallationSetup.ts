@@ -121,6 +121,14 @@ export const useInstallationSetup = () => {
 
     hasCheckedOnMount.current = true;
 
+    // Browser / web-only local mode has no Electron installer or bundled backend.
+    if (!window.electronAPI || !window.ipcRenderer) {
+      if (initState !== 'done') {
+        setInitState('done');
+      }
+      return;
+    }
+
     const checkToolInstalled = async () => {
       try {
         const result = await window.ipcRenderer.invoke("check-tool-installed");
@@ -223,6 +231,10 @@ export const useInstallationSetup = () => {
         setBackendError(data.error || 'Backend startup failed');
       }
     };
+
+    if (!window.electronAPI) {
+      return;
+    }
 
     window.electronAPI.onInstallDependenciesStart(handleInstallStart);
     window.electronAPI.onInstallDependenciesLog(handleInstallLog);

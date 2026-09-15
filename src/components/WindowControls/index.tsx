@@ -7,7 +7,7 @@ export default function WindowControls() {
 	const [platform, setPlatform] = useState<string>("");
 
 	useEffect(() => {
-		const p = window.electronAPI.getPlatform();
+		const p = window.electronAPI?.getPlatform?.() ?? "";
 		setPlatform(p);
 
 		if (p === "darwin") {
@@ -17,7 +17,7 @@ export default function WindowControls() {
 		}
 	}, []);
 
-	if (platform === "darwin") {
+	if (platform === "darwin" || !window.electronAPI) {
 		return null;
 	}
 

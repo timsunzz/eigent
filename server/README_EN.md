@@ -38,11 +38,17 @@ VITE_BASE_URL=/api
 VITE_USE_LOCAL_PROXY=true
 VITE_PROXY_URL=http://localhost:3001
 ```
-- Start the frontend application:
+- Start the desktop app:
 ```bash
 npm install
 npm run dev
 ```
+- Or start a browser-only UI (no Electron) against the local API:
+```bash
+npm install
+npm run dev:web
+```
+Then open `http://127.0.0.1:7777`. Register/login through the local API, then add your own model provider in Settings.
 
 ### Open API docs
 - `http://localhost:3001/docs` (Swagger UI)

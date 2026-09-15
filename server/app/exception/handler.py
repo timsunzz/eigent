@@ -42,6 +42,7 @@ async def no_permission(request: Request, exception: NoPermissionException):
     )
 
 
+@api.exception_handler(NoResultFound)
 async def no_results(request: Request, exception: NoResultFound):
     return JSONResponse(
         status_code=200,

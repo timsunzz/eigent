@@ -97,51 +97,34 @@ export default function GroupedHistoryView({
     // Create the deletion callback that will be executed after confirmation
     const deleteCallback = async () => {
       try {
-        // Find the project in our existing data
         const targetProject = projects.find(project => project.project_id === projectId);
 
-        if (targetProject && targetProject.tasks && targetProject.tasks.length > 0) {
-          console.log(`Deleting project ${projectId} with ${targetProject.tasks.length} tasks`);
-          
-          // Delete each task one by one
+        if (!targetProject) {
+          console.warn(`Project ${projectId} not found`);
+          return;
+        }
+
+        console.log(`Deleting project ${projectId} with ${targetProject.tasks?.length || 0} tasks`);
+        await proxyFetchDelete(`/api/chat/project/${projectId}`);
+
+        const {email} = getAuthStore();
+        if (email && (window as any).ipcRenderer && targetProject.tasks) {
           for (const history of targetProject.tasks) {
+            if (!history.task_id) continue;
             try {
-              await proxyFetchDelete(`/api/chat/history/${history.id}`);
-              console.log(`Successfully deleted task ${history.task_id}`);
-              
-              // Also delete local files for this task if available (via Electron IPC)
-              const {email} = getAuthStore();
-              if (history.task_id && (window as any).ipcRenderer) {
-                try {
-                  await (window as any).ipcRenderer.invoke('delete-task-files', email, history.task_id, history.project_id ?? undefined);
-                  console.log(`Successfully cleaned up local files for task ${history.task_id}`);
-                } catch (error) {
-                  console.warn(`Local file cleanup failed for task ${history.task_id}:`, error);
-                }
-              }
+              await (window as any).ipcRenderer.invoke('delete-task-files', email, history.task_id, history.project_id ?? undefined);
             } catch (error) {
-              console.error(`Failed to delete task ${history.task_id}:`, error);
+              console.warn(`Local file cleanup failed for task ${history.task_id}:`, error);
             }
           }
-          
-          // Remove from projectStore
-          projectStore.removeProject(projectId);
-          
-          // Update local state to remove the project
-          setProjects(prevProjects => prevProjects.filter(project => project.project_id !== projectId));
-          
-          console.log(`Completed deletion of project ${projectId}`);
-        } else if (targetProject) {
-          // Project exists but has no tasks, just remove from store
-          console.log(`Project ${projectId} has no tasks, removing from store only`);
-          projectStore.removeProject(projectId);
-          setProjects(prevProjects => prevProjects.filter(project => project.project_id !== projectId));
-        } else {
-          console.warn(`Project ${projectId} not found`);
         }
+
+        projectStore.removeProject(projectId);
+        setProjects(prevProjects => prevProjects.filter(project => project.project_id !== projectId));
+        console.log(`Completed deletion of project ${projectId}`);
       } catch (error) {
         console.error("Failed to delete project:", error);
-        throw error; // Re-throw to let parent handle errors
+        throw error;
       }
     };
 

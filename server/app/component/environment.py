@@ -28,6 +28,9 @@ def env(key: str, default: Any) -> Any: ...
 
 def env(key: str, default=None):
     value = os.getenv(key, default)
+    # docker-compose commonly sets DATABASE_URL; the app historically reads database_url.
+    if value is None and key == "database_url":
+        value = os.getenv("DATABASE_URL", default)
     logger.debug("Environment variable accessed", extra={"key": key, "has_value": value is not None, "using_default": value == default})
     return value
 

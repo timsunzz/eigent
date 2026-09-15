@@ -180,39 +180,28 @@ export default function HistorySidebar() {
 	// Deletes whole project by using the tasks from historyTasks state
 	const deleteWholeProject = async (projectId: string) => {
 		try {
-			// Find the project in our existing data
 			const targetProject = historyTasks.find(project => project.project_id === projectId);
-			
-			if (targetProject && targetProject.tasks) {
-				console.log(`Found project ${projectId} with ${targetProject.tasks.length} tasks to delete`);
-				
-				// Delete each task one by one
+			if (!targetProject) {
+				console.warn(`Project ${projectId} not found or has no tasks`);
+				return;
+			}
+
+			await proxyFetchDelete(`/api/chat/project/${projectId}`);
+
+			const {email} = getAuthStore();
+			if (email && (window as any).ipcRenderer && targetProject.tasks) {
 				for (const history of targetProject.tasks) {
-					console.log(`Deleting task: ${history.task_id} (history ID: ${history.id})`);
+					if (!history.task_id) continue;
 					try {
-						const deleteRes = await proxyFetchDelete(`/api/chat/history/${history.id}`);
-						console.log(`Successfully deleted task ${history.task_id}:`, deleteRes);
-						
-						// Also delete local files for this task if available (via Electron IPC)
-						const {email} = getAuthStore();
-						if (history.task_id && (window as any).ipcRenderer) {
-							try {
-								await (window as any).ipcRenderer.invoke('delete-task-files', email, history.task_id, history.project_id ?? undefined);
-								console.log(`Successfully cleaned up local files for task ${history.task_id}`);
-							} catch (error) {
-								console.warn(`Local file cleanup failed for task ${history.task_id}:`, error);
-							}
-						}
+						await (window as any).ipcRenderer.invoke('delete-task-files', email, history.task_id, history.project_id ?? undefined);
 					} catch (error) {
-						console.error(`Failed to delete task ${history.task_id}:`, error);
+						console.warn(`Local file cleanup failed for task ${history.task_id}:`, error);
 					}
 				}
-				
-				projectStore.removeProject(projectId);
-				console.log(`Completed deletion of project ${projectId}`);
-			} else {
-				console.warn(`Project ${projectId} not found or has no tasks`);
 			}
+
+			projectStore.removeProject(projectId);
+			console.log(`Completed deletion of project ${projectId}`);
 		} catch (error) {
 			console.error("Failed to delete whole project:", error);
 		}

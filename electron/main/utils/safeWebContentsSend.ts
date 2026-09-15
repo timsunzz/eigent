@@ -8,9 +8,14 @@ import { getMainWindow } from "../init";
  */
 function safeMainWindowSend(channel: string, data?: any) {
   const mainWindow = getMainWindow();
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send(channel, data);
-    return true;
+  if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+    try {
+      mainWindow.webContents.send(channel, data);
+      return true;
+    } catch (error) {
+      log.warn(`[WEBCONTENTS SEND] Failed to send ${channel}:`, error);
+      return false;
+    }
   } else {
     log.warn(`[WEBCONTENTS SEND] Cannot send message to main window: ${channel}`, data);
     return false;

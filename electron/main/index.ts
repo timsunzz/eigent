@@ -21,6 +21,7 @@ import axios from 'axios';
 import FormData from 'form-data';
 import { checkAndInstallDepsOnUpdate, PromiseReturnType, getInstallationStatus } from './install-deps'
 import { isBinaryExists, getBackendPath, getVenvPath } from './utils/process'
+import { safeMainWindowSend } from './utils/safeWebContentsSend'
 
 const userData = app.getPath('userData');
 
@@ -1588,7 +1589,9 @@ const handleBeforeClose = () => {
     win?.on("close", (event) => {
       if (!isQuitting) {
         event.preventDefault();
-        win?.webContents.send("before-close");
+        if (win && !win.isDestroyed() && !win.webContents.isDestroyed()) {
+          safeMainWindowSend("before-close");
+        }
       }
     })
 }

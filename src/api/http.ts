@@ -59,6 +59,20 @@ async function fetchRequest(
   return handleResponse(fetch(fullUrl, options), data)
 }
 
+export function getHttpErrorMessage(resData: any, status: number): string {
+  if (typeof resData?.text === 'string' && resData.text) {
+    return resData.text
+  }
+  if (typeof resData?.detail === 'string' && resData.detail) {
+    return resData.detail
+  }
+  if (Array.isArray(resData?.detail) && resData.detail.length > 0) {
+    const first = resData.detail[0]
+    return first?.msg || first?.message || JSON.stringify(first)
+  }
+  return `Request failed with status ${status}`
+}
+
 async function handleResponse(responsePromise: Promise<Response>, requestData?: Record<string, any>): Promise<any> {
   try {
     const res = await responsePromise
@@ -68,13 +82,30 @@ async function handleResponse(responsePromise: Promise<Response>, requestData?: 
 
     const contentType = res.headers.get('content-type') || ''
     if (res.body && !contentType.includes('application/json')) {
+      if (!res.ok) {
+        throw new Error(getHttpErrorMessage(null, res.status))
+      }
       return {
         isStream: true,
         body: res.body,
         reader: res.body.getReader(),
       }
     }
-    const resData = await res.json()
+
+    let resData: any = null
+    try {
+      resData = await res.json()
+    } catch {
+      if (!res.ok) {
+        throw new Error(getHttpErrorMessage(null, res.status))
+      }
+      return null
+    }
+
+    if (!res.ok) {
+      throw new Error(getHttpErrorMessage(resData, res.status))
+    }
+
     if (!resData) {
       return null
     }
@@ -95,9 +126,6 @@ async function handleResponse(responsePromise: Promise<Response>, requestData?: 
     }
 
     if (code === 13) {
-      // const { logout } = getAuthStore()
-      // logout()
-      // window.location.href = '#/login'
       throw new Error(text)
     }
 
@@ -111,12 +139,6 @@ async function handleResponse(responsePromise: Promise<Response>, requestData?: 
     }
 
     console.error('[fetch error]:', err)
-
-    if (err?.response?.status === 401) {
-      // const { logout } = getAuthStore()
-      // logout()
-      // window.location.href = '#/login'
-    }
 
     throw err
   }

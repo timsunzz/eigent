@@ -1,8 +1,10 @@
 #!/bin/sh
 
 # wait for database to be ready
-echo "Waiting for database to be ready..."
-while ! nc -z postgres 5432; do
+DB_HOST="${DB_HOST:-postgres}"
+DB_PORT="${DB_PORT:-5432}"
+echo "Waiting for database to be ready at ${DB_HOST}:${DB_PORT}..."
+while ! nc -z "$DB_HOST" "$DB_PORT"; do
   sleep 1
 done
 echo "Database is ready!"

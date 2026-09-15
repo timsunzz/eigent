@@ -111,7 +111,7 @@ export default function SettingGeneral() {
 	];
 
 	useEffect(() => {
-		const platform = window.electronAPI.getPlatform();
+		const platform = window.electronAPI?.getPlatform?.() ?? "";
 		console.log(platform);
 		if (platform === "darwin") {
 			setThemeList([

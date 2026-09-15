@@ -39,11 +39,17 @@ VITE_BASE_URL=/api
 VITE_USE_LOCAL_PROXY=true
 VITE_PROXY_URL=http://localhost:3001
 ```
-- 启动前端应用：
+- 启动桌面端：
 ```bash
 npm install
 npm run dev
 ```
+- 或启动仅浏览器 UI（不启动 Electron）对接本地 API：
+```bash
+npm install
+npm run dev:web
+```
+然后打开 `http://127.0.0.1:7777`。通过本地 API 注册/登录后，在设置中添加你自己的模型供应商。
 
 ### 访问 API 文档
 - 浏览器打开 `http://localhost:3001/docs`（Swagger UI）
