@@ -109,12 +109,9 @@ def list_grouped_chat_history(
             project_data['latest_task_date'] = history.created_at.isoformat() if history.created_at else ''
             project_data['last_prompt'] = history.question  # Set the most recent question
         
-        # Convert to ChatHistoryOut format
-        history_out = ChatHistoryOut(**history.model_dump())
-        
-        # Add task to project if requested
+        # Add task to project if requested (skip serialization otherwise)
         if include_tasks:
-            project_data['tasks'].append(history_out)
+            project_data['tasks'].append(ChatHistoryOut(**history.model_dump()))
         
         # Update project statistics
         project_data['task_count'] += 1

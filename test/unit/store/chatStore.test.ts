@@ -462,6 +462,50 @@ describe('ChatStore - Core Functionality', () => {
         expect(result.current.getState().tasks[taskId].progressValue).toBe(50)
       })
     })
+
+    it('should write progress to the requested task, not the active one', () => {
+      const { result } = renderHook(() => useChatStore())
+
+      act(() => {
+        const backgroundId = result.current.getState().create()
+        const activeId = result.current.getState().create()
+
+        result.current.getState().setTaskRunning(backgroundId, [
+          { id: '1', content: 'Task 1', status: 'completed' },
+          { id: '2', content: 'Task 2', status: 'running' },
+        ] as any)
+
+        result.current.getState().computedProgressValue(backgroundId)
+
+        expect(result.current.getState().activeTaskId).toBe(activeId)
+        expect(result.current.getState().tasks[backgroundId].progressValue).toBe(50)
+        expect(result.current.getState().tasks[activeId].progressValue).toBe(0)
+      })
+    })
+
+    it('should treat an empty running list as 0% instead of NaN', () => {
+      const { result } = renderHook(() => useChatStore())
+
+      act(() => {
+        const taskId = result.current.getState().create()
+        result.current.getState().setTaskRunning(taskId, [])
+        result.current.getState().computedProgressValue(taskId)
+        expect(result.current.getState().tasks[taskId].progressValue).toBe(0)
+      })
+    })
+  })
+
+  describe('File list safety', () => {
+    it('should not throw when setFileList cannot find the process task', () => {
+      const { result } = renderHook(() => useChatStore())
+
+      act(() => {
+        const taskId = result.current.getState().create()
+        expect(() => {
+          result.current.getState().setFileList(taskId, 'missing-process', [])
+        }).not.toThrow()
+      })
+    })
   })
 
   describe('Update Counter', () => {

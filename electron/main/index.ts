@@ -21,6 +21,7 @@ import axios from 'axios';
 import FormData from 'form-data';
 import { checkAndInstallDepsOnUpdate, PromiseReturnType, getInstallationStatus } from './install-deps'
 import { isBinaryExists, getBackendPath, getVenvPath } from './utils/process'
+import { filenameFromUrl, safeDecodeURIComponent, splitCommandArgs } from './utils/pathUtils'
 
 const userData = app.getPath('userData');
 
@@ -349,9 +350,9 @@ function registerIpcHandlers() {
 
       log.info(' start execute command:', commandWithHost);
 
-      // Parse command and arguments
-      const [cmd, ...args] = commandWithHost.split(' ');
-      log.info('start execute command:', commandWithHost.split(' '));
+      // Parse command and arguments without breaking quoted paths or CJK names
+      const [cmd, ...args] = splitCommandArgs(commandWithHost);
+      log.info('start execute command:', [cmd, ...args]);
       console.log(cmd, args)
       return new Promise((resolve) => {
         const child = spawn(cmd, args, {
@@ -903,8 +904,7 @@ function registerIpcHandlers() {
       const http = await import('http');
 
       // extract file name from URL
-      const urlObj = new URL(url);
-      const fileName = urlObj.pathname.split('/').pop() || 'download';
+      const fileName = filenameFromUrl(url);
 
       // get download directory
       const downloadPath = path.join(app.getPath('downloads'), fileName);
@@ -1614,7 +1614,7 @@ app.whenReady().then(async () => {
   // ==================== protocol handle ====================
   // Register protocol handler for both default session and main window session
   const protocolHandler = async (request: Request) => {
-    const url = decodeURIComponent(request.url.replace('localfile://', ''));
+    const url = safeDecodeURIComponent(request.url.replace('localfile://', ''));
     const filePath = path.normalize(url);
 
     log.info(`[PROTOCOL] Handling localfile request: ${request.url}`);

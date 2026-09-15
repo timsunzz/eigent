@@ -51,6 +51,7 @@ class ActionImproveData(BaseModel):
     action: Literal[Action.improve] = Action.improve
     data: str
     new_task_id: str | None = None
+    attaches: list[str] | None = None
 
 
 class ActionStartData(BaseModel):
@@ -312,6 +313,12 @@ class TaskLock:
 
     async def put_human_input(self, agent: str, data: Any = None):
         logger.debug("Adding human input", extra={"task_id": self.id, "agent": agent, "has_data": data is not None})
+        if agent not in self.human_input:
+            logger.warning(
+                "Human input queue missing, creating one",
+                extra={"task_id": self.id, "agent": agent},
+            )
+            self.human_input[agent] = asyncio.Queue(1)
         await self.human_input[agent].put(data)
 
     async def get_human_input(self, agent: str):

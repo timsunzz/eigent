@@ -212,7 +212,10 @@ export default function ChatBox(): JSX.Element {
 						// This reuses the existing SSE connection and step_solve loop
 						fetchPost(`/chat/${projectStore.activeProjectId}`, {
 							question: tempMessageContent,
-							task_id: nextTaskId
+							task_id: nextTaskId,
+							attaches: (JSON.parse(JSON.stringify(chatStore.tasks[_taskId]?.attaches)) || [])
+								.map((f: any) => f.filePath)
+								.filter(Boolean),
 						});
 						chatStore.setIsPending(_taskId, true);
 						// Add the user message to show it in UI
@@ -486,10 +489,17 @@ export default function ChatBox(): JSX.Element {
 		}
 
 		// Get question and attachments before any deletions
-		const messageIndex = chatStore.tasks[taskId].messages.findLastIndex(
+		const messages = chatStore.tasks[taskId].messages;
+		const messageIndex = messages.findLastIndex(
 			(item) => item.step === "to_sub_tasks"
 		);
-		const questionMessage = chatStore.tasks[taskId].messages[messageIndex - 2];
+		const questionMessage = messageIndex === -1
+			? messages.findLast((item) => item.role === "user")
+			: [...messages.slice(0, messageIndex)].findLast((item) => item.role === "user");
+		if (!questionMessage) {
+			console.error("No user message found for edit operation");
+			return;
+		}
 		const question = questionMessage.content;
 		// Get the file attachments from the original user message (not from task.attaches which gets cleared after sending)
 		const attachments = questionMessage.attaches || [];

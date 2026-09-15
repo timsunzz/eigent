@@ -338,9 +338,17 @@ async def step_solve(options: Chat, request: Request, task_lock: TaskLock):
                     })
                     continue
 
+                followup_attaches = list(options.attaches or [])
+                camel_task_id = options.task_id
+                if isinstance(item, ActionImproveData):
+                    if item.attaches:
+                        followup_attaches = list(item.attaches)
+                    if item.new_task_id:
+                        camel_task_id = item.new_task_id
+
                 # Simplified logic: attachments mean workforce, otherwise let agent decide
                 is_complex_task: bool
-                if len(options.attaches) > 0:
+                if len(followup_attaches) > 0:
                     # Questions with attachments always need workforce
                     is_complex_task = True
                     logger.info(f"[NEW-QUESTION] Has attachments, treating as complex task")
@@ -423,15 +431,15 @@ async def step_solve(options: Chat, request: Request, task_lock: TaskLock):
                         clean_task_content = question + options.summary_prompt
                         logger.info(f"[NEW-QUESTION] Updating existing camel_task content with new question")
                         # We keep the existing task structure but update content for new decomposition
-                        camel_task = Task(content=clean_task_content, id=options.task_id)
-                        if len(options.attaches) > 0:
-                            camel_task.additional_info = {Path(file_path).name: file_path for file_path in options.attaches}
+                        camel_task = Task(content=clean_task_content, id=camel_task_id)
+                        if len(followup_attaches) > 0:
+                            camel_task.additional_info = {Path(file_path).name: file_path for file_path in followup_attaches}
                     else:
                         clean_task_content = question + options.summary_prompt
-                        logger.info(f"[NEW-QUESTION] Creating NEW camel_task with id={options.task_id}")
-                        camel_task = Task(content=clean_task_content, id=options.task_id)
-                        if len(options.attaches) > 0:
-                            camel_task.additional_info = {Path(file_path).name: file_path for file_path in options.attaches}
+                        logger.info(f"[NEW-QUESTION] Creating NEW camel_task with id={camel_task_id}")
+                        camel_task = Task(content=clean_task_content, id=camel_task_id)
+                        if len(followup_attaches) > 0:
+                            camel_task.additional_info = {Path(file_path).name: file_path for file_path in followup_attaches}
 
                     # Stream decomposition in background so queue items (decompose_text) are processed immediately
                     logger.info(f"[NEW-QUESTION] 🧩 Starting task decomposition via workforce.eigent_make_sub_tasks")

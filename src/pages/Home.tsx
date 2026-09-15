@@ -75,6 +75,9 @@ export default function Home() {
 
 		// capture webview
 		const captureWebview = async () => {
+			if (typeof document !== "undefined" && document.hidden) {
+				return;
+			}
 			const activeTask = chatStore.tasks[chatStore.activeTaskId as string];
 			if (!activeTask || activeTask.status === "finished") {
 				return;
@@ -138,17 +141,25 @@ export default function Home() {
 
 		let intervalTimer: NodeJS.Timeout | null = null;
 
+		const onVisibilityChange = () => {
+			if (!document.hidden) {
+				captureWebview();
+			}
+		};
+
 		const initialTimer = setTimeout(() => {
 			captureWebview();
 			intervalTimer = setInterval(captureWebview, 2000);
 		}, 2000);
 
-		// cleanup function
+		document.addEventListener("visibilitychange", onVisibilityChange);
+
 		return () => {
 			clearTimeout(initialTimer);
 			if (intervalTimer) {
 				clearInterval(intervalTimer);
 			}
+			document.removeEventListener("visibilitychange", onVisibilityChange);
 		};
 	}, [chatStore.tasks[chatStore.activeTaskId as string]?.taskAssigning]);
 

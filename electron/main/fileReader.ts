@@ -525,7 +525,7 @@ export class FileReader {
 				const filePath = path.join(dirPath, file);
 				const stats = fs.statSync(filePath);
 				const isFolder = stats.isDirectory();
-				const relativePath = path.relative(basePath, dirPath);
+				const relativePath = path.relative(basePath, dirPath).replaceAll('\\', '/');
 
 				const fileInfo: FileInfo = {
 					path: filePath,

@@ -2,6 +2,7 @@ import { Copy, FileText } from "lucide-react";
 import { MarkDown } from "./MarkDown";
 import { useMemo } from "react";
 import { Button } from "../../ui/button";
+import { getFileBaseName, getFileExtension } from "@/lib/file";
 
 interface AgentMessageCardProps {
 	id: string;
@@ -78,10 +79,10 @@ export function AgentMessageCard({
 								<FileText size={24} className="flex-shrink-0" />
 								<div className="flex flex-col">
 									<div className="max-w-48 font-bold text-sm text-body text-text-body overflow-hidden text-ellipsis whitespace-nowrap">
-										{file?.fileName?.split(".")[0]}
+										{getFileBaseName(file?.fileName)}
 									</div>
 									<div className="font-medium leading-29 text-xs text-text-body">
-										{file?.fileName?.split(".")[1]}
+										{getFileExtension(file?.fileName)}
 									</div>
 								</div>
 							</div>

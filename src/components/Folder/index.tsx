@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { getFileExtension, normalizeRelativePath } from "@/lib/file";
 import {
 	ChevronsLeft,
 	Search,
@@ -234,17 +235,18 @@ export default function Folder({ data }: { data?: Agent }) {
 		nodeMap.set("", root);
 
 		const sortedFiles = [...files].sort((a, b) => {
-			const depthA = (a.relativePath || "").split("/").filter(Boolean).length;
-			const depthB = (b.relativePath || "").split("/").filter(Boolean).length;
+			const depthA = normalizeRelativePath(a.relativePath).split("/").filter(Boolean).length;
+			const depthB = normalizeRelativePath(b.relativePath).split("/").filter(Boolean).length;
 			return depthA - depthB;
 		});
 
 		for (const file of sortedFiles) {
-			const fullRelativePath = file.relativePath
-				? `${file.relativePath}/${file.name}`
+			const relativePath = normalizeRelativePath(file.relativePath);
+			const fullRelativePath = relativePath
+				? `${relativePath}/${file.name}`
 				: file.name;
 
-			const parentPath = file.relativePath || "";
+			const parentPath = relativePath || "";
 			const parentNode = nodeMap.get(parentPath) || root;
 
 			const node: FileTreeNode = {
@@ -310,13 +312,15 @@ export default function Folder({ data }: { data?: Agent }) {
 	}, [chatStore.activeTaskId]);
 
 	useEffect(() => {
-		const setFileList = async () => {
+		let cancelled = false;
+		const timer = setTimeout(async () => {
 			let res = null;
-			res = await window.ipcRenderer.invoke(
+			res = await window.ipcRenderer?.invoke(
 				"get-project-file-list",
 				authStore.email,
 				projectStore.activeProjectId as string
 			);
+			if (cancelled) return;
 			let tree: any = null;
 			if (
 				(res && res.length > 0) ||
@@ -331,12 +335,12 @@ export default function Folder({ data }: { data?: Agent }) {
 					});
 					hasFetchedRemote.current = true;
 				}
-				console.log("res", res);
+				if (cancelled) return;
 				if (res) {
 					res = res.map((item: any) => {
 						return {
 							name: item.filename,
-							type: item.filename.split(".")[1],
+							type: getFileExtension(item.filename),
 							path: item.url,
 							isRemote: true,
 						};
@@ -345,16 +349,13 @@ export default function Folder({ data }: { data?: Agent }) {
 				}
 			}
 			setFileTree(tree);
-			// Keep the old structure for compatibility
 			setFileGroups((prev) => {
 				const chatStoreSelectedFile =
 					chatStore.tasks[chatStore.activeTaskId as string]?.selectedFile;
 				if (chatStoreSelectedFile) {
-					console.log(res, chatStoreSelectedFile);
-					const file = res.find(
+					const file = res?.find(
 						(item: any) => item.name === chatStoreSelectedFile.name
 					);
-					console.log("file", file);
 					if (file && selectedFile?.path !== chatStoreSelectedFile?.path) {
 						selectedFileChange(file as FileInfo, isShowSourceCode);
 					}
@@ -366,9 +367,17 @@ export default function Folder({ data }: { data?: Agent }) {
 					},
 				];
 			});
+		}, 350);
+		return () => {
+			cancelled = true;
+			clearTimeout(timer);
 		};
-		setFileList();
-	}, [chatStore.tasks[chatStore.activeTaskId as string]?.taskAssigning]);
+	}, [
+		chatStore.activeTaskId,
+		chatStore.tasks[chatStore.activeTaskId as string]?.nuwFileNum,
+		projectStore.activeProjectId,
+		authStore.email,
+	]);
 
 	useEffect(() => {
 		const chatStoreSelectedFile =

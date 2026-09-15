@@ -1,6 +1,13 @@
 // Example unit test for utility functions
 import { describe, it, expect } from 'vitest'
 import { cn } from '@/lib/utils'
+import {
+  getFileBaseName,
+  getFileExtension,
+  normalizeRelativePath,
+  safeDecodeURIComponent,
+  splitCommandArgs,
+} from '@/lib/file'
 
 describe('utils', () => {
   describe('cn function', () => {
@@ -41,6 +48,37 @@ describe('utils', () => {
     it('should handle arrays of classes', () => {
       const result = cn(['class1', 'class2'], 'class3')
       expect(result).toBe('class1 class2 class3')
+    })
+  })
+
+  describe('file helpers', () => {
+    it('should take the last extension and keep CJK / spaced names', () => {
+      expect(getFileExtension('my.report.pdf')).toBe('pdf')
+      expect(getFileExtension('季度 报告.docx')).toBe('docx')
+      expect(getFileExtension('no-extension')).toBe('')
+      expect(getFileBaseName('my.report.pdf')).toBe('my.report')
+      expect(getFileBaseName('季度 报告.docx')).toBe('季度 报告')
+    })
+
+    it('should normalize Windows relative paths for the folder tree', () => {
+      expect(normalizeRelativePath('task_x\\subdir')).toBe('task_x/subdir')
+      expect(normalizeRelativePath('')).toBe('')
+    })
+
+    it('should decode URLs without throwing on a literal percent', () => {
+      expect(safeDecodeURIComponent('%E4%B8%AD%E6%96%87.pdf')).toBe('中文.pdf')
+      expect(safeDecodeURIComponent('100% done')).toBe('100% done')
+    })
+
+    it('should keep quoted and CJK arguments intact', () => {
+      expect(splitCommandArgs('npx -y "@scope/pkg" --path "/tmp/my file"')).toEqual([
+        'npx',
+        '-y',
+        '@scope/pkg',
+        '--path',
+        '/tmp/my file',
+      ])
+      expect(splitCommandArgs('echo 中文 路径')).toEqual(['echo', '中文', '路径'])
     })
   })
 })

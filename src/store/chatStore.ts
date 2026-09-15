@@ -211,19 +211,15 @@ const chatStore = (initial?: Partial<ChatStore>) => createStore<ChatStore>()(
 			return taskId
 		},
 		computedProgressValue(taskId: string) {
-			const { tasks, setProgressValue, activeTaskId } = get()
-			const taskRunning = [...tasks[taskId].taskRunning]
-			const finshedTask = taskRunning?.filter(
+			const { tasks, setProgressValue } = get()
+			const taskRunning = [...(tasks[taskId]?.taskRunning || [])]
+			const finishedTask = taskRunning.filter(
 				(task) => task.status === "completed" || task.status === "failed"
 			).length;
-			const taskProgress = (
-				((finshedTask || 0) / (taskRunning?.length || 0)) *
-				100
-			).toFixed(2);
-			setProgressValue(
-				activeTaskId as string,
-				Number(taskProgress)
-			);
+			const taskProgress = taskRunning.length === 0
+				? 0
+				: (finishedTask / taskRunning.length) * 100;
+			setProgressValue(taskId, Number(taskProgress.toFixed(2)));
 		},
 		removeTask(taskId: string) {
 			// Clean up any pending auto-confirm timers when removing a task
@@ -618,16 +614,18 @@ const chatStore = (initial?: Partial<ChatStore>) => createStore<ChatStore>()(
 						console.error('Failed to parse SSE message:', error);
 						console.error('Raw event.data:', event.data);
 
-						// Create error task to notify user
 						const currentStore = getCurrentChatStore();
-						const newTaskId = currentStore.create();
-						currentStore.setActiveTaskId(newTaskId);
-						currentStore.setHasWaitComfirm(newTaskId, true);
-						currentStore.addMessages(newTaskId, {
-							id: generateUniqueId(),
-							role: "agent",
-							content: `**System Error**: Failed to parse server message. The connection may be unstable.\n\nPlease try again or contact support if this persists.`,
-						});
+						const lockedId = getCurrentTaskId();
+						if (currentStore.tasks[lockedId]) {
+							currentStore.setHasWaitComfirm(lockedId, true);
+							currentStore.setStatus(lockedId, 'finished');
+							currentStore.setIsPending(lockedId, false);
+							currentStore.addMessages(lockedId, {
+								id: generateUniqueId(),
+								role: "agent",
+								content: `**System Error**: Failed to parse server message. The connection may be unstable.\n\nPlease try again or contact support if this persists.`,
+							});
+						}
 						return;
 					}
 
@@ -1765,6 +1763,9 @@ const chatStore = (initial?: Partial<ChatStore>) => createStore<ChatStore>()(
 							let taskAssigning = [...tasks[currentTaskId].taskAssigning]
 
 							const assigneeAgentIndex = taskAssigning!.findIndex((agent: Agent) => agent.tasks.find((task: TaskInfo) => task.id === agentMessages.data.process_task_id));
+							if (assigneeAgentIndex === -1) {
+								return;
+							}
 							const task = taskAssigning[assigneeAgentIndex].tasks.find((task: TaskInfo) => task.id === agentMessages.data.process_task_id);
 							const toolkit = {
 								toolkitId: generateUniqueId(),
@@ -1773,7 +1774,7 @@ const chatStore = (initial?: Partial<ChatStore>) => createStore<ChatStore>()(
 								message: agentMessages.data.notice as string,
 								toolkitStatus: "running" as AgentStatus,
 							}
-							if (assigneeAgentIndex !== -1 && task) {
+							if (task) {
 								task.toolkits ??= []
 								task.toolkits.push({ ...toolkit });
 							}
@@ -1873,7 +1874,22 @@ const chatStore = (initial?: Partial<ChatStore>) => createStore<ChatStore>()(
 				// Server closes connection
 				onclose() {
 					console.log("SSE connection closed");
-					// Clean up AbortController when connection closes with robust error handling
+					try {
+						const store = getCurrentChatStore();
+						const lockedId = getCurrentTaskId();
+						const task = store.tasks[lockedId];
+						if (task && task.status === 'running') {
+							store.setStatus(lockedId, 'finished');
+							store.setIsPending(lockedId, false);
+							store.addMessages(lockedId, {
+								id: generateUniqueId(),
+								role: "agent",
+								content: "**System Error**: The connection closed unexpectedly. Please try again.",
+							});
+						}
+					} catch (statusError) {
+						console.warn('Error updating task status on SSE close:', statusError);
+					}
 					try {
 						if (activeSSEControllers[newTaskId]) {
 							delete activeSSEControllers[newTaskId];
@@ -2298,8 +2314,11 @@ const chatStore = (initial?: Partial<ChatStore>) => createStore<ChatStore>()(
 			const taskAssigning = [...tasks[taskId].taskAssigning]
 
 			const taskAssigningIndex = taskAssigning.findIndex((task) => task.tasks.find((task) => task.id === processTaskId))
+			if (taskAssigningIndex === -1) {
+				return
+			}
 			const taskIndex = taskAssigning[taskAssigningIndex].tasks.findIndex((task) => task.id === processTaskId)
-			if (taskAssigningIndex !== -1) {
+			if (taskIndex !== -1) {
 				taskAssigning[taskAssigningIndex].tasks[taskIndex].fileList = [...fileList]
 				setTaskAssigning(taskId, taskAssigning)
 			}

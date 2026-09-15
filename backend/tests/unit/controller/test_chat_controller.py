@@ -65,47 +65,48 @@ class TestChatController:
             assert os.environ.get("CAMEL_MODEL_LOG_ENABLED") == "true"
             assert os.environ.get("browser_port") == "8080"
 
-    def test_improve_chat_success(self, mock_task_lock):
+    @pytest.mark.asyncio
+    async def test_improve_chat_success(self, mock_task_lock):
         """Test successful chat improvement."""
         task_id = "test_task_123"
-        supplement_data = SupplementChat(question="Improve this code")
+        supplement_data = SupplementChat(question="Improve this code", attaches=["/tmp/a.pdf"])
         mock_task_lock.status = Status.processing
         
-        with patch("app.controller.chat_controller.get_task_lock", return_value=mock_task_lock), \
-             patch("asyncio.run") as mock_run:
-            
-            response = improve(task_id, supplement_data)
+        with patch("app.controller.chat_controller.get_task_lock", return_value=mock_task_lock):
+            response = await improve(task_id, supplement_data)
             
             assert isinstance(response, Response)
             assert response.status_code == 201
-            mock_run.assert_called_once()
-            # put_queue is invoked when creating the coroutine passed to asyncio.run
             mock_task_lock.put_queue.assert_called_once()
 
-    def test_improve_chat_task_done_error(self, mock_task_lock):
-        """Test improvement fails when task is done."""
+    @pytest.mark.asyncio
+    async def test_improve_chat_allows_done_task(self, mock_task_lock):
+        """Follow-up improve should reset a finished task instead of failing."""
         task_id = "test_task_123"
         supplement_data = SupplementChat(question="Improve this code")
         mock_task_lock.status = Status.done
+        mock_task_lock.conversation_history = []
+        mock_task_lock.last_task_result = ""
+        mock_task_lock.background_tasks = set()
         
         with patch("app.controller.chat_controller.get_task_lock", return_value=mock_task_lock):
-            with pytest.raises(UserException):
-                improve(task_id, supplement_data)
+            response = await improve(task_id, supplement_data)
+            assert response.status_code == 201
+            assert mock_task_lock.status == Status.confirming
 
-    def test_supplement_chat_success(self, mock_task_lock):
+    @pytest.mark.asyncio
+    async def test_supplement_chat_success(self, mock_task_lock):
         """Test successful chat supplementation."""
         task_id = "test_task_123"
         supplement_data = SupplementChat(question="Add more details")
         mock_task_lock.status = Status.done
         
-        with patch("app.controller.chat_controller.get_task_lock", return_value=mock_task_lock), \
-             patch("asyncio.run") as mock_run:
-            
-            response = supplement(task_id, supplement_data)
+        with patch("app.controller.chat_controller.get_task_lock", return_value=mock_task_lock):
+            response = await supplement(task_id, supplement_data)
             
             assert isinstance(response, Response)
             assert response.status_code == 201
-            mock_run.assert_called_once()
+            mock_task_lock.put_queue.assert_called_once()
 
     def test_supplement_chat_task_not_done_error(self, mock_task_lock):
         """Test supplementation fails when task is not done."""
@@ -117,46 +118,43 @@ class TestChatController:
             with pytest.raises(UserException):
                 supplement(task_id, supplement_data)
 
-    def test_stop_chat_success(self, mock_task_lock):
+    @pytest.mark.asyncio
+    async def test_stop_chat_success(self, mock_task_lock):
         """Test successful chat stopping."""
         task_id = "test_task_123"
         
-        with patch("app.controller.chat_controller.get_task_lock", return_value=mock_task_lock), \
-             patch("asyncio.run") as mock_run:
-            
-            response = stop(task_id)
+        with patch("app.controller.chat_controller.get_task_lock", return_value=mock_task_lock):
+            response = await stop(task_id)
             
             assert isinstance(response, Response)
             assert response.status_code == 204
-            mock_run.assert_called_once()
+            mock_task_lock.put_queue.assert_called_once()
 
-    def test_human_reply_success(self, mock_task_lock):
+    @pytest.mark.asyncio
+    async def test_human_reply_success(self, mock_task_lock):
         """Test successful human reply."""
         task_id = "test_task_123"
         reply_data = HumanReply(agent="test_agent", reply="This is my reply")
         
-        with patch("app.controller.chat_controller.get_task_lock", return_value=mock_task_lock), \
-             patch("asyncio.run") as mock_run:
-            
-            response = human_reply(task_id, reply_data)
+        with patch("app.controller.chat_controller.get_task_lock", return_value=mock_task_lock):
+            response = await human_reply(task_id, reply_data)
             
             assert isinstance(response, Response)
             assert response.status_code == 201
-            mock_run.assert_called_once()
+            mock_task_lock.put_human_input.assert_called_once()
 
-    def test_install_mcp_success(self, mock_task_lock):
+    @pytest.mark.asyncio
+    async def test_install_mcp_success(self, mock_task_lock):
         """Test successful MCP installation."""
         task_id = "test_task_123"
         mcp_data: McpServers = {"mcpServers": {"test_server": {"config": "test"}}}
         
-        with patch("app.controller.chat_controller.get_task_lock", return_value=mock_task_lock), \
-             patch("asyncio.run") as mock_run:
-            
-            response = install_mcp(task_id, mcp_data)
+        with patch("app.controller.chat_controller.get_task_lock", return_value=mock_task_lock):
+            response = await install_mcp(task_id, mcp_data)
             
             assert isinstance(response, Response)
             assert response.status_code == 201
-            mock_run.assert_called_once()
+            mock_task_lock.put_queue.assert_called_once()
 
 
 @pytest.mark.integration
@@ -309,27 +307,26 @@ class TestChatControllerErrorCases:
         # If future validation moves to endpoint level, keep logic placeholder below.
         # (Intentionally not calling post with invalid Chat object since creation fails.)
 
-    def test_improve_with_nonexistent_task(self):
+    @pytest.mark.asyncio
+    async def test_improve_with_nonexistent_task(self):
         """Test improve endpoint with nonexistent task."""
         task_id = "nonexistent_task"
         supplement_data = SupplementChat(question="Improve this code")
         
         with patch("app.controller.chat_controller.get_task_lock", side_effect=KeyError("Task not found")):
             with pytest.raises(KeyError):
-                improve(task_id, supplement_data)
+                await improve(task_id, supplement_data)
 
-    def test_supplement_with_empty_question(self, mock_task_lock):
+    @pytest.mark.asyncio
+    async def test_supplement_with_empty_question(self, mock_task_lock):
         """Test supplement endpoint with empty question."""
         task_id = "test_task_123"
         supplement_data = SupplementChat(question="")
         mock_task_lock.status = Status.done
         
-        with patch("app.controller.chat_controller.get_task_lock", return_value=mock_task_lock), \
-             patch("asyncio.run"):
-            
-            # Should handle empty question gracefully or raise appropriate error
-            response = supplement(task_id, supplement_data)
-            assert response.status_code == 201  # Or should it be an error?
+        with patch("app.controller.chat_controller.get_task_lock", return_value=mock_task_lock):
+            response = await supplement(task_id, supplement_data)
+            assert response.status_code == 201
 
     @pytest.mark.asyncio
     async def test_post_environment_setup_failure(self, sample_chat_data, mock_request):

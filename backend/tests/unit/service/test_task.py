@@ -64,6 +64,13 @@ class TestTaskServiceModels:
         assert data.action == Action.improve
         assert data.data == "Improve this code"
         assert data.new_task_id == "task_123"
+        assert data.attaches is None
+
+    def test_action_improve_data_with_attaches(self):
+        """Follow-up improve should accept attachment paths."""
+        data = ActionImproveData(data="Improve this", new_task_id="task_123", attaches=["/tmp/报告.pdf"])
+
+        assert data.attaches == ["/tmp/报告.pdf"]
 
     def test_action_start_data_creation(self):
         """Test ActionStartData model creation."""
@@ -239,6 +246,15 @@ class TestTaskLock:
         await task_lock.put_human_input(agent_name, "user response")
         response = await task_lock.get_human_input(agent_name)
         assert response == "user response"
+
+    @pytest.mark.asyncio
+    async def test_task_lock_human_input_creates_missing_queue(self):
+        """Human replies should not KeyError if the listen queue is missing."""
+        task_lock = TaskLock("test_123", asyncio.Queue(), {})
+
+        await task_lock.put_human_input("late_agent", "late reply")
+        response = await task_lock.get_human_input("late_agent")
+        assert response == "late reply"
 
     @pytest.mark.asyncio
     async def test_task_lock_background_task_management(self):

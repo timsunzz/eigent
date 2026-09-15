@@ -117,7 +117,7 @@ export function SearchHistoryDialog() {
 									 * TODO(history): Update to use project_id field
 									 * after update instead.
 									 */
-									onSelect={() => handleSetActive(task.task_id, task.question, task.id)}
+									onSelect={() => handleSetActive(task.project_id || task.task_id, task.question, task.id)}
 								>
 									<ScanFace />
 									<div className="overflow-hidden text-ellipsis whitespace-nowrap">

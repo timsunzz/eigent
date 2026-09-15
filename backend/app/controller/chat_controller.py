@@ -42,7 +42,8 @@ async def timeout_stream_wrapper(stream_generator, timeout_seconds: int = SSE_TI
     """
     Wraps a stream generator with timeout handling.
 
-    Closes the SSE connection if no data is received within the timeout period.
+    Closes the SSE connection if no data is received within the timeout period
+    and yields an error event so the frontend can mark the task finished.
     """
     last_data_time = time.time()
     generator = stream_generator.__aiter__()
@@ -50,7 +51,7 @@ async def timeout_stream_wrapper(stream_generator, timeout_seconds: int = SSE_TI
     try:
         while True:
             elapsed = time.time() - last_data_time
-            remaining_timeout = timeout_seconds - elapsed
+            remaining_timeout = max(0.1, timeout_seconds - elapsed)
 
             try:
                 data = await asyncio.wait_for(generator.__anext__(), timeout=remaining_timeout)
@@ -58,8 +59,7 @@ async def timeout_stream_wrapper(stream_generator, timeout_seconds: int = SSE_TI
                 yield data
             except asyncio.TimeoutError:
                 chat_logger.warning(f"SSE timeout: No data received for {timeout_seconds} seconds, closing connection")
-                # yield sse_json("error", {"message": "Connection timeout: No data received for 10 minutes"})
-                # TODO: Temporary change: suppress error signal to frontend on timeout. Needs proper fix later.
+                yield sse_json("error", {"message": "Connection timeout: No data received for 10 minutes"})
                 break
             except StopAsyncIteration:
                 break
@@ -130,7 +130,7 @@ async def post(data: Chat, request: Request):
 
 @router.post("/chat/{id}", name="improve chat")
 @traceroot.trace()
-def improve(id: str, data: SupplementChat):
+async def improve(id: str, data: SupplementChat):
     chat_logger.info("Chat improvement requested", extra={"task_id": id, "question_length": len(data.question)})
     task_lock = get_task_lock(id)
 
@@ -183,26 +183,28 @@ def improve(id: str, data: SupplementChat):
         except Exception as e:
             chat_logger.error(f"Error updating file path for project_id: {id}, task_id: {data.task_id}: {e}")
 
-    asyncio.run(task_lock.put_queue(ActionImproveData(data=data.question, new_task_id=data.task_id)))
+    await task_lock.put_queue(
+        ActionImproveData(data=data.question, new_task_id=data.task_id, attaches=data.attaches)
+    )
     chat_logger.info("Improvement request queued with preserved context", extra={"project_id": id})
     return Response(status_code=201)
 
 
 @router.put("/chat/{id}", name="supplement task")
 @traceroot.trace()
-def supplement(id: str, data: SupplementChat):
+async def supplement(id: str, data: SupplementChat):
     chat_logger.info("Chat supplement requested", extra={"task_id": id})
     task_lock = get_task_lock(id)
     if task_lock.status != Status.done:
         raise UserException(code.error, "Please wait task done")
-    asyncio.run(task_lock.put_queue(ActionSupplementData(data=data)))
+    await task_lock.put_queue(ActionSupplementData(data=data))
     chat_logger.debug("Supplement data queued", extra={"task_id": id})
     return Response(status_code=201)
 
 
 @router.delete("/chat/{id}", name="stop chat")
 @traceroot.trace()
-def stop(id: str):
+async def stop(id: str):
     """stop the task"""
     chat_logger.info("=" * 80)
     chat_logger.info("🛑 [STOP-BUTTON] DELETE /chat/{id} request received from frontend")
@@ -212,7 +214,7 @@ def stop(id: str):
         task_lock = get_task_lock(id)
         chat_logger.info(f"[STOP-BUTTON] Task lock retrieved, task_lock.id: {task_lock.id}, task_lock.status: {task_lock.status}")
         chat_logger.info(f"[STOP-BUTTON] Queueing ActionStopData(Action.stop) to task_lock queue")
-        asyncio.run(task_lock.put_queue(ActionStopData(action=Action.stop)))
+        await task_lock.put_queue(ActionStopData(action=Action.stop))
         chat_logger.info(f"[STOP-BUTTON] ✅ ActionStopData queued successfully, this will trigger workforce.stop_gracefully()")
     except Exception as e:
         # Task lock may not exist if task is already finished or never started
@@ -222,27 +224,27 @@ def stop(id: str):
 
 @router.post("/chat/{id}/human-reply")
 @traceroot.trace()
-def human_reply(id: str, data: HumanReply):
+async def human_reply(id: str, data: HumanReply):
     chat_logger.info("Human reply received", extra={"task_id": id, "reply_length": len(data.reply)})
     task_lock = get_task_lock(id)
-    asyncio.run(task_lock.put_human_input(data.agent, data.reply))
+    await task_lock.put_human_input(data.agent, data.reply)
     chat_logger.debug("Human reply processed", extra={"task_id": id})
     return Response(status_code=201)
 
 
 @router.post("/chat/{id}/install-mcp")
 @traceroot.trace()
-def install_mcp(id: str, data: McpServers):
+async def install_mcp(id: str, data: McpServers):
     chat_logger.info("Installing MCP servers", extra={"task_id": id, "servers_count": len(data.get("mcpServers", {}))})
     task_lock = get_task_lock(id)
-    asyncio.run(task_lock.put_queue(ActionInstallMcpData(action=Action.install_mcp, data=data)))
+    await task_lock.put_queue(ActionInstallMcpData(action=Action.install_mcp, data=data))
     chat_logger.info("MCP installation queued", extra={"task_id": id})
     return Response(status_code=201)
 
 
 @router.post("/chat/{id}/add-task", name="add task to workforce")
 @traceroot.trace()
-def add_task(id: str, data: AddTaskRequest):
+async def add_task(id: str, data: AddTaskRequest):
     """Add a new task to the workforce"""
     chat_logger.info(f"Adding task to workforce for task_id: {id}, content: {data.content[:100]}...")
     task_lock = get_task_lock(id)
@@ -256,7 +258,7 @@ def add_task(id: str, data: AddTaskRequest):
             additional_info=data.additional_info,
             insert_position=data.insert_position,
         )
-        asyncio.run(task_lock.put_queue(add_task_action))
+        await task_lock.put_queue(add_task_action)
         return Response(status_code=201)
 
     except Exception as e:
@@ -266,7 +268,7 @@ def add_task(id: str, data: AddTaskRequest):
 
 @router.delete("/chat/{project_id}/remove-task/{task_id}", name="remove task from workforce")
 @traceroot.trace()
-def remove_task(project_id: str, task_id: str):
+async def remove_task(project_id: str, task_id: str):
     """Remove a task from the workforce"""
     chat_logger.info(f"Removing task {task_id} from workforce for project_id: {project_id}")
     task_lock = get_task_lock(project_id)
@@ -274,7 +276,7 @@ def remove_task(project_id: str, task_id: str):
     try:
         # Queue the remove task action
         remove_task_action = ActionRemoveTaskData(task_id=task_id, project_id=project_id)
-        asyncio.run(task_lock.put_queue(remove_task_action))
+        await task_lock.put_queue(remove_task_action)
 
         chat_logger.info(f"Task removal request queued for project_id: {project_id}, removing task: {task_id}")
         return Response(status_code=204)
@@ -286,7 +288,7 @@ def remove_task(project_id: str, task_id: str):
 
 @router.post("/chat/{project_id}/skip-task", name="skip task in workforce")
 @traceroot.trace()
-def skip_task(project_id: str):
+async def skip_task(project_id: str):
     """
     Skip/Stop current task execution while preserving context.
     This endpoint is called when user clicks the Stop button.
@@ -309,7 +311,7 @@ def skip_task(project_id: str):
         # Queue the skip task action - this will preserve context for multi-turn
         skip_task_action = ActionSkipTaskData(project_id=project_id)
         chat_logger.info(f"[STOP-BUTTON] Queueing ActionSkipTaskData (preserves context, marks as done)")
-        asyncio.run(task_lock.put_queue(skip_task_action))
+        await task_lock.put_queue(skip_task_action)
 
         chat_logger.info(f"[STOP-BUTTON] ✅ Skip request queued - task will stop gracefully and preserve context")
         return Response(status_code=201)
