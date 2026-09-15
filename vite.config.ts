@@ -10,7 +10,9 @@ import pkg from './package.json'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ command, mode }) => {
-  rmSync('dist-electron', { recursive: true, force: true })
+  if (command === 'build') {
+    rmSync('dist-electron', { recursive: true, force: true })
+  }
 
   const isServe = command === 'serve'
   const isBuild = command === 'build'
@@ -24,7 +26,6 @@ export default defineConfig(({ command, mode }) => {
     },
     optimizeDeps: {
       exclude: ['@stackframe/react'],
-      force: true,
     },
     plugins: [
       react(),
@@ -71,6 +72,19 @@ export default defineConfig(({ command, mode }) => {
         renderer: {},
       }),
     ],
+    build: {
+      chunkSizeWarningLimit: 3000,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor-monaco': ['monaco-editor', '@monaco-editor/react'],
+            'vendor-xterm': ['@xterm/xterm', '@xterm/addon-fit', '@xterm/addon-web-links'],
+            'vendor-flow': ['@xyflow/react'],
+            'vendor-motion': ['framer-motion', 'motion', 'gsap'],
+          },
+        },
+      },
+    },
     server: {
       open: false,
       ...(process.env.VSCODE_DEBUG && (() => {

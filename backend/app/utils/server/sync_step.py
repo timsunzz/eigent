@@ -68,7 +68,8 @@ def sync_step(func):
 
 
 async def send_to_api(url, data):
-    async with httpx.AsyncClient() as client:
+    timeout = httpx.Timeout(10.0, connect=5.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
         try:
             res = await client.post(url, json=data)
             # logger.info(res)

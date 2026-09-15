@@ -118,7 +118,7 @@ def google_search(query: str, search_type: str = "web", key: Key = Depends(key_m
     
     try:
         # Make the GET request
-        result = requests.get(url)
+        result = requests.get(url, timeout=(5, 15))
         data = result.json()
 
         # Get the result items

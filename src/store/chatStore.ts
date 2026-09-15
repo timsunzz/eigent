@@ -211,8 +211,8 @@ const chatStore = (initial?: Partial<ChatStore>) => createStore<ChatStore>()(
 			return taskId
 		},
 		computedProgressValue(taskId: string) {
-			const { tasks, setProgressValue, activeTaskId } = get()
-			const taskRunning = [...tasks[taskId].taskRunning]
+		const { tasks, setProgressValue } = get()
+		const taskRunning = [...tasks[taskId].taskRunning]
 			const finshedTask = taskRunning?.filter(
 				(task) => task.status === "completed" || task.status === "failed"
 			).length;
@@ -220,10 +220,10 @@ const chatStore = (initial?: Partial<ChatStore>) => createStore<ChatStore>()(
 				((finshedTask || 0) / (taskRunning?.length || 0)) *
 				100
 			).toFixed(2);
-			setProgressValue(
-				activeTaskId as string,
-				Number(taskProgress)
-			);
+		setProgressValue(
+			taskId,
+			Number(taskProgress)
+		);
 		},
 		removeTask(taskId: string) {
 			// Clean up any pending auto-confirm timers when removing a task
@@ -246,14 +246,14 @@ const chatStore = (initial?: Partial<ChatStore>) => createStore<ChatStore>()(
 				console.warn('Error aborting SSE connection in removeTask:', error);
 			}
 
-			set((state) => {
-				delete state.tasks[taskId];
-				return ({
-					tasks: {
-						...state.tasks,
-					},
-				})
+		set((state) => {
+			const { [taskId]: _removed, ...restTasks } = state.tasks;
+			return ({
+				tasks: {
+					...restTasks,
+				},
 			})
+		})
 		},
 		updateMessage(taskId: string, messageId: string, message: Message) {
 			set((state) => {
@@ -1019,9 +1019,9 @@ const chatStore = (initial?: Partial<ChatStore>) => createStore<ChatStore>()(
 											removeList.push(index)
 										}
 									});
-									removeList.forEach((webviewIndex) => {
-										item.activeWebviewIds?.splice(webviewIndex, 1);
-									});
+								removeList.sort((a, b) => b - a).forEach((webviewIndex) => {
+									item.activeWebviewIds?.splice(webviewIndex, 1);
+								});
 								}
 								return item
 							})
@@ -2595,22 +2595,23 @@ const chatStore = (initial?: Partial<ChatStore>) => createStore<ChatStore>()(
 );
 
 const filterMessage = (message: AgentMessage) => {
-	if (message.data.toolkit_name?.includes('Search ')) {
-		message.data.toolkit_name = 'Search Toolkit'
+	const data = { ...message.data };
+	if (data.toolkit_name?.includes('Search ')) {
+		data.toolkit_name = 'Search Toolkit'
 	}
-	if (message.data.method_name?.includes('search')) {
-		message.data.method_name = 'search'
+	if (data.method_name?.includes('search')) {
+		data.method_name = 'search'
 	}
 
-	message.data.message = normalizeToolkitMessage(message.data.message);
+	data.message = normalizeToolkitMessage(data.message);
 
-	if (message.data.toolkit_name === 'Note Taking Toolkit') {
-		message.data.message = message.data.message.replace(/content='/g, '').replace(/', update=False/g, '').replace(/', update=True/g, '')
+	if (data.toolkit_name === 'Note Taking Toolkit') {
+		data.message = data.message.replace(/content='/g, '').replace(/', update=False/g, '').replace(/', update=True/g, '')
 	}
-	if (message.data.method_name === 'scrape') {
-		message.data.message = message.data.message.replace(/url='/g, '').slice(0, -1)
+	if (data.method_name === 'scrape') {
+		data.message = data.message.replace(/url='/g, '').slice(0, -1)
 	}
-	return message
+	return { ...message, data }
 }
 
 

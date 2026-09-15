@@ -86,5 +86,5 @@ async def auth_must(
 async def key_must(headers: ApiKey = Header(), session: Session = Depends(session)):
     model = session.exec(select(Key).where(Key.value == headers.api_key)).one_or_none()
     if model is None:
-        raise TokenException(code.token_invalid, _(f"Could not validate key credentials: {headers.api_key}"))
+        raise TokenException(code.token_invalid, _("Could not validate key credentials"))
     return model

@@ -66,6 +66,14 @@ async function handleResponse(responsePromise: Promise<Response>, requestData?: 
       return { code: 0, text: '' }
     }
 
+    if (!res.ok) {
+      const errText = await res.text().catch(() => res.statusText)
+      const httpError: any = new Error(`HTTP ${res.status}: ${errText}`)
+      httpError.status = res.status
+      httpError.response = res
+      throw httpError
+    }
+
     const contentType = res.headers.get('content-type') || ''
     if (res.body && !contentType.includes('application/json')) {
       return {
@@ -112,7 +120,7 @@ async function handleResponse(responsePromise: Promise<Response>, requestData?: 
 
     console.error('[fetch error]:', err)
 
-    if (err?.response?.status === 401) {
+    if (err?.status === 401 || err?.response?.status === 401) {
       // const { logout } = getAuthStore()
       // logout()
       // window.location.href = '#/login'
