@@ -24,7 +24,6 @@ export default defineConfig(({ command, mode }) => {
     },
     optimizeDeps: {
       exclude: ['@stackframe/react'],
-      force: true,
     },
     plugins: [
       react(),
@@ -73,18 +72,29 @@ export default defineConfig(({ command, mode }) => {
     ],
     server: {
       open: false,
-      ...(process.env.VSCODE_DEBUG && (() => {
-        const url = new URL(pkg.debug.env.VITE_DEV_SERVER_URL)
+      ...(isServe && (() => {
+        const debugConfig = process.env.VSCODE_DEBUG
+          ? (() => {
+              const url = new URL(pkg.debug.env.VITE_DEV_SERVER_URL)
+              return { host: url.hostname, port: +url.port }
+            })()
+          : {}
+
+        const proxyTarget = env.VITE_PROXY_URL || 'http://localhost:3001'
+        const useLocalProxy = env.VITE_USE_LOCAL_PROXY === 'true'
+
         return {
-          host: url.hostname,
-          port: +url.port,
-          proxy: {
-            '/api': {
-              target: env.VITE_PROXY_URL,
-              changeOrigin: true,
-              // rewrite: path => path.replace(/^\/api/, ''),
-            },
-          },
+          ...debugConfig,
+          ...(useLocalProxy || process.env.VSCODE_DEBUG
+            ? {
+                proxy: {
+                  '/api': {
+                    target: proxyTarget,
+                    changeOrigin: true,
+                  },
+                },
+              }
+            : {}),
         }
       })()),
       clearScreen: false,
