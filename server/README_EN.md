@@ -51,7 +51,17 @@ npm run dev
 - API: Host `3001` → Container `5678`
 - PostgreSQL: Host `127.0.0.1:5432` → Container `5432` (localhost only)
 
-Set `POSTGRES_PASSWORD` in `server/.env` before exposing this stack beyond your machine. The compose file defaults to a local-only bind so the development password is not advertised on the LAN.
+Set `POSTGRES_PASSWORD` and `secret_key` in `server/.env` before exposing this stack beyond your machine. The compose file defaults to a local-only bind so the development password is not advertised on the LAN. `secret_key` signs local login JWTs — do not keep the example value in production.
+
+### Cloud deploy (Railway)
+
+The FastAPI service can run on Railway with the included `railway.toml` and `server/Dockerfile`. Required variables:
+
+- `DATABASE_URL` / `database_url` — Postgres connection string
+- `secret_key` or `SECRET_KEY` — JWT signing secret
+- `PORT` — listen port (Railway injects this; keep it aligned with the public domain target port)
+
+Health check: `GET /health` (always unprefixed, even if `url_prefix=/api`).
 
 ### Data Persistence
 - DB data is stored in Docker volume `server_postgres_data` at `/var/lib/postgresql/data` inside the container

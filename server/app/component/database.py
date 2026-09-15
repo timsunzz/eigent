@@ -14,6 +14,8 @@ engine = create_engine(
     env_or_fail("database_url"),
     echo=True if env("debug") == "on" else False,
     pool_size=36,
+    pool_pre_ping=True,
+    pool_recycle=300,
 )
 
 logger.info("Database engine initialized successfully")

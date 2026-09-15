@@ -108,6 +108,7 @@ describe('useInstallationSetup Hook', () => {
       expect(electronAPI.onInstallDependenciesStart).toHaveBeenCalled()
       expect(electronAPI.onInstallDependenciesLog).toHaveBeenCalled()
       expect(electronAPI.onInstallDependenciesComplete).toHaveBeenCalled()
+      expect(electronAPI.onBackendReady).toHaveBeenCalled()
     })
 
     it('should handle install-dependencies-start event', () => {
@@ -194,6 +195,7 @@ describe('useInstallationSetup Hook', () => {
       expect(electronAPI.removeAllListeners).toHaveBeenCalledWith('install-dependencies-start')
       expect(electronAPI.removeAllListeners).toHaveBeenCalledWith('install-dependencies-log')
       expect(electronAPI.removeAllListeners).toHaveBeenCalledWith('install-dependencies-complete')
+      expect(electronAPI.removeAllListeners).toHaveBeenCalledWith('backend-ready')
     })
   })
 

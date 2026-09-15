@@ -21,6 +21,11 @@ logger = traceroot.get_logger("server_main")
 
 prefix = env("url_prefix", "")
 auto_include_routers(api, prefix, "app/controller")
+# Orchestrators (Railway, Docker) probe /health. Keep it unprefixed even when
+# url_prefix=/api is set for the rest of the API.
+from app.controller.health_controller import router as health_router
+
+api.include_router(health_router)
 public_dir = os.environ.get("PUBLIC_DIR") or os.path.join(os.path.dirname(__file__), "app", "public")
 if not os.path.isdir(public_dir):
     try:

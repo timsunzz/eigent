@@ -224,16 +224,16 @@ export const useInstallationSetup = () => {
       }
     };
 
-    window.electronAPI.onInstallDependenciesStart(handleInstallStart);
-    window.electronAPI.onInstallDependenciesLog(handleInstallLog);
-    window.electronAPI.onInstallDependenciesComplete(handleInstallComplete);
-    window.electronAPI.onBackendReady(handleBackendReady);
+    window.electronAPI?.onInstallDependenciesStart?.(handleInstallStart);
+    window.electronAPI?.onInstallDependenciesLog?.(handleInstallLog);
+    window.electronAPI?.onInstallDependenciesComplete?.(handleInstallComplete);
+    window.electronAPI?.onBackendReady?.(handleBackendReady);
 
     return () => {
-      window.electronAPI.removeAllListeners('install-dependencies-start');
-      window.electronAPI.removeAllListeners('install-dependencies-log');
-      window.electronAPI.removeAllListeners('install-dependencies-complete');
-      window.electronAPI.removeAllListeners('backend-ready');
+      window.electronAPI?.removeAllListeners?.('install-dependencies-start');
+      window.electronAPI?.removeAllListeners?.('install-dependencies-log');
+      window.electronAPI?.removeAllListeners?.('install-dependencies-complete');
+      window.electronAPI?.removeAllListeners?.('backend-ready');
     };
   }, [startInstallation, addLog, setSuccess, setError, setBackendError, setInitState]);
 };

@@ -215,13 +215,15 @@ const chatStore = (initial?: Partial<ChatStore>) => createStore<ChatStore>()(
 			const currentTask = tasks[taskId]
 			if (!currentTask) return
 			const taskRunning = [...currentTask.taskRunning]
-			const finshedTask = taskRunning?.filter(
+			const total = taskRunning.length
+			if (total === 0) {
+				setProgressValue(taskId, 0)
+				return
+			}
+			const finshedTask = taskRunning.filter(
 				(task) => task.status === "completed" || task.status === "failed"
 			).length;
-			const taskProgress = (
-				((finshedTask || 0) / (taskRunning?.length || 0)) *
-				100
-			).toFixed(2);
+			const taskProgress = ((finshedTask / total) * 100).toFixed(2);
 			setProgressValue(
 				taskId,
 				Number(taskProgress)

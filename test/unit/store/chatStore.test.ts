@@ -21,6 +21,7 @@ vi.mock('@/api/http', () => ({
   proxyFetchGet: vi.fn(),
   uploadFile: vi.fn(),
   fetchDelete: vi.fn(),
+  waitForBackendReady: vi.fn(() => Promise.resolve(true)),
 }))
 
 vi.mock('@microsoft/fetch-event-source', () => ({
@@ -474,6 +475,17 @@ describe('ChatStore - Core Functionality', () => {
         
         // 2 out of 4 = 50%
         expect(result.current.getState().tasks[taskId].progressValue).toBe(50)
+      })
+    })
+
+    it('should keep progress at 0 when a task has no running items', () => {
+      const { result } = renderHook(() => useChatStore())
+
+      act(() => {
+        const taskId = result.current.getState().create()
+        result.current.getState().computedProgressValue(taskId)
+        expect(result.current.getState().tasks[taskId].progressValue).toBe(0)
+        expect(Number.isNaN(result.current.getState().tasks[taskId].progressValue)).toBe(false)
       })
     })
 

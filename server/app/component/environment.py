@@ -26,8 +26,23 @@ def env(key: str, default: str) -> str: ...
 def env(key: str, default: Any) -> Any: ...
 
 
+def _getenv(key: str) -> str | None:
+    """Look up an env var, accepting the upper/lower-case alias used by PaaS hosts."""
+    value = os.getenv(key)
+    if value is not None:
+        return value
+    for alt in (key.upper(), key.lower()):
+        if alt != key:
+            value = os.getenv(alt)
+            if value is not None:
+                return value
+    return None
+
+
 def env(key: str, default=None):
-    value = os.getenv(key, default)
+    value = _getenv(key)
+    if value is None:
+        value = default
     logger.debug("Environment variable accessed", extra={"key": key, "has_value": value is not None, "using_default": value == default})
     return value
 

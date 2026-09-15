@@ -19,12 +19,16 @@ from app.exception.exception import (
 
 
 class Auth:
-    SECRET_KEY = env_not_empty("secret_key")
-
     def __init__(self, id: int, expired_at: datetime):
         self.id = id
         self.expired_at = expired_at
         self._user: User | None = None
+
+    @staticmethod
+    def secret_key() -> str:
+        # Resolved on use so importing this module does not take down every
+        # authenticated route when secret_key / SECRET_KEY is still unset.
+        return env_not_empty("secret_key")
 
     @property
     def user(self):
@@ -35,7 +39,7 @@ class Auth:
     @classmethod
     def decode_token(cls, token: str):
         try:
-            payload = jwt.decode(token, Auth.SECRET_KEY, algorithms=["HS256"])
+            payload = jwt.decode(token, cls.secret_key(), algorithms=["HS256"])
             id = payload["id"]
             if payload["exp"] < int(datetime.now().timestamp()):
                 raise TokenException(code.token_expired, _("Validate credentials expired"))
@@ -51,7 +55,7 @@ class Auth:
         else:
             expire = datetime.now() + timedelta(days=30)
         to_encode.update({"exp": expire})
-        encoded_jwt = jwt.encode(to_encode, Auth.SECRET_KEY, algorithm="HS256")
+        encoded_jwt = jwt.encode(to_encode, cls.secret_key(), algorithm="HS256")
         return encoded_jwt
 
 

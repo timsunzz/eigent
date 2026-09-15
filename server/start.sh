@@ -5,6 +5,24 @@ if [ -z "${database_url:-}" ] && [ -n "${DATABASE_URL:-}" ]; then
   export database_url="$DATABASE_URL"
 fi
 
+# PaaS hosts typically inject SECRET_KEY; the app reads secret_key.
+if [ -z "${secret_key:-}" ] && [ -n "${SECRET_KEY:-}" ]; then
+  export secret_key="$SECRET_KEY"
+fi
+
+# Derive DB host/port from the URL when they are not set explicitly.
+if [ -z "${POSTGRES_HOST:-}" ] && [ -n "${database_url:-}" ]; then
+  eval "$(python3 -c '
+import os, urllib.parse
+url = os.environ.get("database_url") or ""
+u = urllib.parse.urlparse(url)
+if u.hostname:
+    print("export POSTGRES_HOST=%s" % repr(u.hostname))
+if u.port:
+    print("export POSTGRES_PORT=%s" % repr(str(u.port)))
+')"
+fi
+
 DB_HOST="${POSTGRES_HOST:-postgres}"
 DB_PORT="${POSTGRES_PORT:-5432}"
 

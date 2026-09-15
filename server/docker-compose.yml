@@ -41,6 +41,8 @@ services:
       - POSTGRES_PORT=5432
       - ENVIRONMENT=production
       - DEBUG=false
+      - secret_key=${secret_key:-change-me-in-production}
+      - url_prefix=${url_prefix:-}
     depends_on:
       postgres:
         condition: service_healthy
