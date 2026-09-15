@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y \
 COPY server/pyproject.toml server/uv.lock ./
 
 # Install the project's dependencies
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=cache,id=uv-cache,target=/root/.cache/uv \
     uv sync --no-install-project --no-dev
 
 # Then, add the rest of the project source code and install it
@@ -34,7 +34,7 @@ COPY server/ /app
 # Copy the utils directory from the parent project
 COPY utils /app/utils
 
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=cache,id=uv-cache,target=/root/.cache/uv \
     uv sync --no-dev
 
 RUN uv run pybabel extract -F babel.cfg -o messages.pot .  && \
