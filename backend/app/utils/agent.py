@@ -353,7 +353,7 @@ class ListenChatAgent(ChatAgent):
             return self._record_tool_calling(
                 func_name, args, result, tool_call_id,
                 mask_output=False,
-                extra_content=tool_call_request.extra_content,
+                extra_content=getattr(tool_call_request, "extra_content", None),
             )
         # Route async functions to async execution even if they have __wrapped__
         if asyncio.iscoroutinefunction(tool.func):
@@ -437,7 +437,7 @@ class ListenChatAgent(ChatAgent):
         return self._record_tool_calling(
             func_name, args, result, tool_call_id,
             mask_output=mask_flag,
-            extra_content=tool_call_request.extra_content,
+            extra_content=getattr(tool_call_request, "extra_content", None),
         )
 
     @traceroot.trace()
@@ -457,7 +457,7 @@ class ListenChatAgent(ChatAgent):
             )
             return self._record_tool_calling(
                 func_name, args, result, tool_call_id,
-                extra_content=tool_call_request.extra_content,
+                extra_content=getattr(tool_call_request, "extra_content", None),
             )
 
         # Always handle tool execution ourselves to maintain ContextVar context
@@ -580,7 +580,7 @@ class ListenChatAgent(ChatAgent):
         )
         return self._record_tool_calling(
             func_name, args, result, tool_call_id,
-            extra_content=tool_call_request.extra_content,
+            extra_content=getattr(tool_call_request, "extra_content", None),
         )
 
     @traceroot.trace()

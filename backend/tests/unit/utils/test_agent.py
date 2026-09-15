@@ -305,11 +305,12 @@ class TestListenChatAgent:
             mock_tool.return_value = "test_async_result"
             agent._internal_tools = {"test_async_tool": mock_tool}
             
-            tool_call_request = MagicMock(spec=ToolCallRequest)
+            tool_call_request = MagicMock()
             tool_call_request.tool_name = "test_async_tool"
             tool_call_request.id = "async_tool_call_123"
             tool_call_request.tool_call_id = "async_tool_call_123"
             tool_call_request.args = {"arg1": "value1"}
+            tool_call_request.extra_content = None
             
             mock_record = MagicMock(spec=ToolCallingRecord)
             
