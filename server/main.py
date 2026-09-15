@@ -11,6 +11,8 @@ from utils import traceroot_wrapper as traceroot
 from app import api
 from app.component.environment import auto_include_routers, env
 from fastapi.staticfiles import StaticFiles
+import app.exception.handler  # registers FastAPI exception handlers
+import app.middleware  # registers Babel locale middleware
 
 # Only initialize traceroot if enabled
 if traceroot.is_enabled():
