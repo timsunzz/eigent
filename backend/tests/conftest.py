@@ -14,8 +14,14 @@
 
 import asyncio
 import os
+import sys
 import tempfile
 from pathlib import Path
+
+# Add project root to Python path so shared `utils` module can be imported
+_project_root = Path(__file__).resolve().parents[2]
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
 from typing import AsyncGenerator, Generator
 from unittest.mock import AsyncMock, MagicMock, patch
 

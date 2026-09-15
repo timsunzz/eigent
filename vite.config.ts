@@ -71,25 +71,33 @@ export default defineConfig(({ command, mode }) => {
         renderer: {},
       }),
     ],
-    server: {
-      open: false,
-      ...(process.env.VSCODE_DEBUG && (() => {
+    server: (() => {
+      const useLocalProxy = env.VITE_USE_LOCAL_PROXY === 'true'
+      const useDebugServer = !!process.env.VSCODE_DEBUG
+      const proxyConfig = useLocalProxy || useDebugServer ? {
+        '/api': {
+          target: env.VITE_PROXY_URL || 'http://localhost:3001',
+          changeOrigin: true,
+        },
+      } : undefined
+
+      if (useDebugServer) {
         const url = new URL(pkg.debug.env.VITE_DEV_SERVER_URL)
         return {
+          open: false,
           host: url.hostname,
           port: +url.port,
-          proxy: {
-            '/api': {
-              target: env.VITE_PROXY_URL,
-              changeOrigin: true,
-              // rewrite: path => path.replace(/^\/api/, ''),
-            },
-          },
+          proxy: proxyConfig,
+          clearScreen: false,
         }
-      })()),
-      clearScreen: false,
+      }
 
-    }
+      return {
+        open: false,
+        proxy: proxyConfig,
+        clearScreen: false,
+      }
+    })()
   }
 })
 

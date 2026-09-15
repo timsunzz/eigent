@@ -54,6 +54,8 @@ const mockImplementation = {
   }),
   uploadFile: vi.fn(),
   fetchDelete: vi.fn(),
+  checkBackendHealth: vi.fn(() => Promise.resolve(true)),
+  waitForBackendReady: vi.fn(() => Promise.resolve(true)),
 }
 
 // Mock both relative and alias paths

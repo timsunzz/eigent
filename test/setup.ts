@@ -43,7 +43,12 @@ global.electronAPI = {
 
 // Mock ipcRenderer
 global.ipcRenderer = {
-  invoke: vi.fn(),
+  invoke: vi.fn().mockImplementation((channel: string) => {
+    if (channel === 'get-backend-port') return Promise.resolve(5001)
+    if (channel === 'get-browser-port') return Promise.resolve(9222)
+    if (channel === 'get-system-language') return Promise.resolve('en')
+    return Promise.resolve(undefined)
+  }),
   on: vi.fn(),
   removeAllListeners: vi.fn(),
 }

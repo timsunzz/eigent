@@ -144,12 +144,21 @@ describe('useInstallationSetup Hook', () => {
     it('should handle install-dependencies-complete event with success', () => {
       renderHook(() => useInstallationSetup())
 
-      // Get the registered callback
+      // Get the registered callbacks
       const completeCallback = electronAPI.onInstallDependenciesComplete.mock.calls[0][0]
+      const backendReadyCallback = electronAPI.onBackendReady.mock.calls[0][0]
       const completeData = { success: true }
       
       act(() => {
         completeCallback(completeData)
+      })
+
+      // setSuccess is deferred until backend is ready
+      expect(mockInstallationStore.setSuccess).not.toHaveBeenCalled()
+      expect(mockAuthStore.setInitState).not.toHaveBeenCalledWith('done')
+
+      act(() => {
+        backendReadyCallback({ success: true, port: 5001 })
       })
 
       expect(mockInstallationStore.setSuccess).toHaveBeenCalled()
@@ -265,9 +274,17 @@ describe('useInstallationSetup Hook', () => {
         expect(mockInstallationStore.startInstallation).toHaveBeenCalled()
       })
 
-      // Should receive logs and completion
+      // Should receive logs during installation
       await vi.waitFor(() => {
         expect(mockInstallationStore.addLog).toHaveBeenCalled()
+      })
+
+      // setSuccess requires backend to be ready after installation completes
+      act(() => {
+        electronAPI.simulateBackendReady(5001)
+      })
+
+      await vi.waitFor(() => {
         expect(mockInstallationStore.setSuccess).toHaveBeenCalled()
       })
     })

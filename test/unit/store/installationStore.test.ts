@@ -188,7 +188,7 @@ describe('Installation Store', () => {
       }, { timeout: 1000 })
       
       expect(electronAPI.checkAndInstallDepsOnUpdate).toHaveBeenCalled()
-      expect(mockSetInitState).toHaveBeenCalledWith('done')
+      // initState is set to 'done' by useInstallationSetup after backend is ready, not here
     })
 
     it('should handle installation failure', async () => {

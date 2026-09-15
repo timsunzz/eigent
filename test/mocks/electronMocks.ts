@@ -28,6 +28,8 @@ export interface MockedElectronAPI {
   onInstallDependenciesStart: ReturnType<typeof vi.fn>
   onInstallDependenciesLog: ReturnType<typeof vi.fn>
   onInstallDependenciesComplete: ReturnType<typeof vi.fn>
+  onBackendReady: ReturnType<typeof vi.fn>
+  getBackendPort: ReturnType<typeof vi.fn>
   removeAllListeners: ReturnType<typeof vi.fn>
   
   // EnvUtil mock functions
@@ -41,6 +43,7 @@ export interface MockedElectronAPI {
   simulateInstallationStart: () => void
   simulateInstallationLog: (type: 'stdout' | 'stderr', data: string) => void
   simulateInstallationComplete: (success: boolean, error?: string) => void
+  simulateBackendReady: (port?: number) => void
   simulateVersionChange: (newVersion: string) => void
   simulateVenvRemoval: () => void
   simulateUvicornStartup: () => void
@@ -65,6 +68,7 @@ export function createElectronAPIMock(): MockedElectronAPI {
   const installStartListeners: Array<() => void> = []
   const installLogListeners: Array<(data: { type: string; data: string }) => void> = []
   const installCompleteListeners: Array<(data: { success: boolean; code?: number; error?: string }) => void> = []
+  const backendReadyListeners: Array<(data: { success: boolean; port?: number; error?: string }) => void> = []
 
   const mockState = {
     venvExists: true,
@@ -162,10 +166,17 @@ export function createElectronAPIMock(): MockedElectronAPI {
       installCompleteListeners.push(callback)
     }),
 
+    onBackendReady: vi.fn().mockImplementation((callback: (data: { success: boolean; port?: number; error?: string }) => void) => {
+      backendReadyListeners.push(callback)
+    }),
+
+    getBackendPort: vi.fn().mockImplementation(async () => 5001),
+
     removeAllListeners: vi.fn().mockImplementation(() => {
       installStartListeners.length = 0
       installLogListeners.length = 0
       installCompleteListeners.length = 0
+      backendReadyListeners.length = 0
     }),
 
     // EnvUtil mock functions
@@ -265,6 +276,12 @@ export function createElectronAPIMock(): MockedElectronAPI {
       )
     },
 
+    simulateBackendReady: (port: number = 5001) => {
+      backendReadyListeners.forEach(listener =>
+        listener({ success: true, port })
+      )
+    },
+
     simulateVersionChange: (newVersion: string) => {
       mockState.currentVersion = newVersion
       // This simulates a version mismatch scenario
@@ -328,6 +345,7 @@ export function createElectronAPIMock(): MockedElectronAPI {
       installStartListeners.length = 0
       installLogListeners.length = 0
       installCompleteListeners.length = 0
+      backendReadyListeners.length = 0
 
       // Reset all mocks
       electronAPI.checkAndInstallDepsOnUpdate.mockClear()
@@ -336,6 +354,8 @@ export function createElectronAPIMock(): MockedElectronAPI {
       electronAPI.onInstallDependenciesStart.mockClear()
       electronAPI.onInstallDependenciesLog.mockClear()
       electronAPI.onInstallDependenciesComplete.mockClear()
+      electronAPI.onBackendReady.mockClear()
+      electronAPI.getBackendPort.mockClear()
       electronAPI.removeAllListeners.mockClear()
       electronAPI.getEnvPath.mockClear()
       electronAPI.updateEnvBlock.mockClear()

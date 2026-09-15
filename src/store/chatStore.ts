@@ -644,6 +644,9 @@ const chatStore = (initial?: Partial<ChatStore>) => createStore<ChatStore>()(
 						agentMessages.step === "new_task_state" ||
 						agentMessages.step === "end";
 
+					const isQueueManagementEvent = agentMessages.step === "remove_task" ||
+						agentMessages.step === "add_task";
+
 					const isMultiTurnSimpleAnswer = agentMessages.step === "wait_confirm";
 
 					if (!currentTask) {
@@ -651,10 +654,11 @@ const chatStore = (initial?: Partial<ChatStore>) => createStore<ChatStore>()(
 						return;
 					}
 
-					if (currentTask.status === 'finished' && !isTaskSwitchingEvent && !isMultiTurnSimpleAnswer) {
+					if (currentTask.status === 'finished' && !isTaskSwitchingEvent && !isQueueManagementEvent && !isMultiTurnSimpleAnswer) {
 						// Ignore messages for finished tasks except:
 						// 1. Task switching events (create new chatStore)
-						// 2. Simple answer events (direct response without new chatStore)
+						// 2. Queue management events (add/remove queued messages)
+						// 3. Simple answer events (direct response without new chatStore)
 						console.log(`Ignoring SSE message for finished task ${lockedTaskId}, step: ${agentMessages.step}`);
 						return;
 					}
