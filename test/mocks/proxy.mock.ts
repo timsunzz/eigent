@@ -54,6 +54,11 @@ const mockImplementation = {
   }),
   uploadFile: vi.fn(),
   fetchDelete: vi.fn(),
+  waitForBackendReady: vi.fn(() => Promise.resolve(true)),
+  checkBackendHealth: vi.fn(() => Promise.resolve(true)),
+  getHttpErrorMessage: vi.fn((resData: any, status: number) =>
+    resData?.text || resData?.detail || `Request failed with status ${status}`
+  ),
 }
 
 // Mock both relative and alias paths

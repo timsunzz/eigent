@@ -30,6 +30,10 @@ class User(AbstractModel, DefaultTimes, table=True):
     inviter_user_id: int | None = Field(default=None, foreign_key="user.id", description="Inviter user ID")
     status: Status = Field(default=Status.Normal.value, sa_column=Column(ChoiceType(Status, SmallInteger())))
 
+    def refresh_credits_on_active(self, session) -> None:
+        """Cloud credit refresh is a no-op for local/self-hosted accounts."""
+        return
+
 
 class UserProfile(BaseModel):
     fullname: str = ""

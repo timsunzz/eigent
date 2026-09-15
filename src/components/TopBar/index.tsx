@@ -71,9 +71,10 @@ function HeaderWin() {
 		// use window.electronAPI instead of window.require
 		const handleFullScreen = async () => {
 			try {
-				// get fullscreen status through window.electronAPI
-				const isFull = await window.electronAPI.isFullScreen();
-				setIsFullscreen(isFull);
+				const isFull = await window.electronAPI?.isFullScreen?.();
+				if (typeof isFull === "boolean") {
+					setIsFullscreen(isFull);
+				}
 			} catch (error) {
 				console.error("Failed to get fullscreen status:", error);
 			}
@@ -386,7 +387,7 @@ function HeaderWin() {
 					</div>
 				)}
 			</div>
-			{platform !== "darwin" && (
+			{platform !== "darwin" && !!window.electronAPI && (
 				<div
 					className="window-controls h-full flex items-center"
 					id="window-controls"

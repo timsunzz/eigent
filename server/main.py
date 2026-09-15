@@ -25,6 +25,11 @@ logger = traceroot.get_logger("server_main")
 
 prefix = env("url_prefix", "")
 auto_include_routers(api, prefix, "app/controller")
+
+# Docker / orchestrators probe /health without the API prefix.
+from app.controller.health_controller import health_check
+
+api.add_api_route("/health", health_check, methods=["GET"], tags=["Health"], name="health check root")
 public_dir = os.environ.get("PUBLIC_DIR") or os.path.join(os.path.dirname(__file__), "app", "public")
 if not os.path.isdir(public_dir):
     try:

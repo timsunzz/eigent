@@ -162,6 +162,9 @@ export function createElectronAPIMock(): MockedElectronAPI {
       installCompleteListeners.push(callback)
     }),
 
+    onBackendReady: vi.fn(),
+    getBackendPort: vi.fn().mockResolvedValue(5001),
+
     removeAllListeners: vi.fn().mockImplementation(() => {
       installStartListeners.length = 0
       installLogListeners.length = 0
