@@ -10,14 +10,11 @@ if str(_project_root) not in sys.path:
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 from sqlmodel import SQLModel
-from app.component.environment import auto_import, env_not_empty
+from app.component.environment import auto_import, env_not_empty, normalize_database_url
 
 
 def _alembic_database_url() -> str:
-    url = env_not_empty("database_url")
-    if url.startswith("postgres://"):
-        return "postgresql://" + url[len("postgres://") :]
-    return url
+    return normalize_database_url(env_not_empty("database_url"))
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

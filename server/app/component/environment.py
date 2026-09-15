@@ -38,6 +38,12 @@ def env(key: str, default=None):
     return value
 
 
+def normalize_database_url(url: str) -> str:
+    if url.startswith("postgres://"):
+        return "postgresql://" + url[len("postgres://") :]
+    return url
+
+
 def env_or_fail(key: str):
     value = env(key)
     if value is None:

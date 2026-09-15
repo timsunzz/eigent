@@ -1,5 +1,4 @@
-from app.component.database import normalize_database_url
-from app.component.environment import env
+from app.component.environment import env, normalize_database_url
 
 
 def test_env_reads_uppercase_alias(monkeypatch):

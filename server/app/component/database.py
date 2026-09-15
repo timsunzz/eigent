@@ -1,15 +1,8 @@
 from sqlmodel import Session, create_engine
-from app.component.environment import env, env_or_fail
+from app.component.environment import env, env_or_fail, normalize_database_url
 from utils import traceroot_wrapper as traceroot
 
 logger = traceroot.get_logger("database")
-
-
-def normalize_database_url(url: str) -> str:
-    if url.startswith("postgres://"):
-        return "postgresql://" + url[len("postgres://") :]
-    return url
-
 
 database_url = normalize_database_url(env_or_fail("database_url"))
 
