@@ -9,6 +9,8 @@ if str(_project_root) not in sys.path:
 
 from utils import traceroot_wrapper as traceroot
 from app import api
+import app.middleware  # noqa: F401  BabelMiddleware
+from app.exception import handler as _exception_handlers  # noqa: F401
 from app.component.environment import auto_include_routers, env, router_prefixes
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -37,6 +39,8 @@ async def api_redoc_alias():
 @api.get("/api/openapi.json", include_in_schema=False)
 async def api_openapi_alias():
     return RedirectResponse(url="/openapi.json")
+
+
 public_dir = os.environ.get("PUBLIC_DIR") or os.path.join(os.path.dirname(__file__), "app", "public")
 if not os.path.isdir(public_dir):
     try:

@@ -18,6 +18,13 @@ from app.exception.exception import (
 )
 
 
+def _text(message: str) -> str:
+    try:
+        return _(message)
+    except LookupError:
+        return message
+
+
 class Auth:
     SECRET_KEY = env_not_empty("secret_key")
 
@@ -33,14 +40,16 @@ class Auth:
         return self._user
 
     @classmethod
-    def decode_token(cls, token: str):
+    def decode_token(cls, token: str | None):
+        if not token:
+            raise TokenException(code.token_need, _text("Could not validate credentials"))
         try:
             payload = jwt.decode(token, Auth.SECRET_KEY, algorithms=["HS256"])
             id = payload["id"]
             if payload["exp"] < int(datetime.now().timestamp()):
-                raise TokenException(code.token_expired, _("Validate credentials expired"))
+                raise TokenException(code.token_expired, _text("Validate credentials expired"))
         except InvalidTokenError:
-            raise TokenException(code.token_invalid, _("Could not validate credentials"))
+            raise TokenException(code.token_invalid, _text("Could not validate credentials"))
         return Auth(id, payload["exp"])
 
     @classmethod
@@ -74,11 +83,13 @@ async def auth(
 
 
 async def auth_must(
-    token: str = Depends(oauth2_scheme),
+    token: str | None = Depends(oauth2_scheme),
     session: Session = Depends(session),
 ) -> Auth:
     model = Auth.decode_token(token)
     user = session.get(User, model.id)
+    if user is None:
+        raise TokenException(code.token_invalid, _text("Could not validate credentials"))
     model._user = user
     return model
 
