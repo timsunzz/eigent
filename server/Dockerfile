@@ -10,8 +10,6 @@ ENV UV_COMPILE_BYTECODE=1
 # Copy from the cache instead of linking since it's a mounted volume
 ENV UV_LINK_MODE=copy
 
-ENV UV_PYTHON_INSTALL_MIRROR=https://registry.npmmirror.com/-/binary/python-build-standalone
-
 ARG database_url
 ENV database_url=$database_url
 
@@ -24,8 +22,7 @@ RUN apt-get update && apt-get install -y \
 COPY server/pyproject.toml server/uv.lock ./
 
 # Install the project's dependencies
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-install-project --no-dev
+RUN uv sync --no-install-project --no-dev
 
 # Then, add the rest of the project source code and install it
 # Installing separately from its dependencies allows optimal layer caching
@@ -34,8 +31,7 @@ COPY server/ /app
 # Copy the utils directory from the parent project
 COPY utils /app/utils
 
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-dev
+RUN uv sync --no-dev
 
 RUN uv run pybabel extract -F babel.cfg -o messages.pot .  && \
     uv run pybabel init -i messages.pot -d lang -l zh_CN  && \
