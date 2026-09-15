@@ -21,5 +21,6 @@ def test_provider_out_exposes_is_valid_alias():
         api_key="sk-test",
         endpoint_url="https://api.openai.com/v1",
         is_vaild=VaildStatus.is_valid,
+        prefer=True,
     )
     assert provider.is_valid is True
