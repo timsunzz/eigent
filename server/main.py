@@ -9,7 +9,8 @@ if str(_project_root) not in sys.path:
 
 from utils import traceroot_wrapper as traceroot
 from app import api
-from app.component.environment import auto_include_routers, env
+from app.component.environment import auto_include_routers, env, router_prefixes
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 # Only initialize traceroot if enabled
@@ -19,8 +20,23 @@ if traceroot.is_enabled():
 
 logger = traceroot.get_logger("server_main")
 
-prefix = env("url_prefix", "")
-auto_include_routers(api, prefix, "app/controller")
+prefix = env("url_prefix", "") or ""
+auto_include_routers(api, router_prefixes(prefix), "app/controller")
+
+
+@api.get("/api/docs", include_in_schema=False)
+async def api_docs_alias():
+    return RedirectResponse(url="/docs")
+
+
+@api.get("/api/redoc", include_in_schema=False)
+async def api_redoc_alias():
+    return RedirectResponse(url="/redoc")
+
+
+@api.get("/api/openapi.json", include_in_schema=False)
+async def api_openapi_alias():
+    return RedirectResponse(url="/openapi.json")
 public_dir = os.environ.get("PUBLIC_DIR") or os.path.join(os.path.dirname(__file__), "app", "public")
 if not os.path.isdir(public_dir):
     try:

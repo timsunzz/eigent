@@ -109,7 +109,7 @@ The API image can also run on Railway (or any host that provides PostgreSQL and 
 2. Set `DATABASE_URL` (or `database_url`) to the Postgres connection string. `postgres://` is accepted and rewritten to `postgresql://`.
 3. Optionally set `secret_key`, `CHAT_SHARE_SECRET_KEY`, and `CHAT_SHARE_SALT`.
 4. The container waits for Postgres when `DB_WAIT_HOST` is set, runs `alembic upgrade head`, then listens on `$PORT` (default `5678`).
-5. Health check: `GET /health`.
+5. Health check: `GET /health` (also served at `GET /api/health` for the desktop client). Swagger: `/docs` or `/api/docs`.
 
 A `railway.toml` at the repo root points Railway at `server/Dockerfile`. After deploy, point the desktop app at the public API URL:
 

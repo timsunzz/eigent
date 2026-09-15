@@ -85,40 +85,34 @@ def auto_import(package: str):
             importlib.import_module(package + "." + module_name)
 
 
-def auto_include_routers(api: FastAPI, prefix: str, directory: str):
-    """
-    自动扫描指定目录下的所有模块并注册路由
+def router_prefixes(configured: str | None) -> list[str]:
+    """Serve both unprefixed and /api routes so Docker healthchecks and the desktop client agree.
 
-    :param api: FastAPI 实例
-    :param prefix: 路由前缀
-    :param directory: 要扫描的目录路径
+    Railway/Docker probe GET /health. The Electron app always calls /api/*.
     """
-    logger.info("Starting automatic router registration", extra={
-        "prefix": prefix,
-        "directory": directory
-    })
+    prefixes: list[str] = []
+    for prefix in (configured or "", "", "/api"):
+        if prefix not in prefixes:
+            prefixes.append(prefix)
+    return prefixes
 
-    # 将目录转换为绝对路径
+
+def _load_controller_routers(directory: str) -> list[APIRouter]:
     dir_path = Path(directory).resolve()
-    router_count = 0
+    routers: list[APIRouter] = []
 
-    # 遍历目录下所有.py文件
     for root, _, files in os.walk(dir_path):
         for file_name in files:
             if file_name.endswith("_controller.py") and not file_name.startswith("__"):
-                # 构造完整文件路径
                 file_path = Path(root) / file_name
+                module_name = file_path.stem
 
                 logger.debug("Processing controller file", extra={
                     "file_name": file_name,
                     "file_path": str(file_path)
                 })
 
-                # 生成模块名称
-                module_name = file_path.stem
-
                 try:
-                    # 使用importlib加载模块
                     spec = importlib.util.spec_from_file_location(module_name, file_path)
                     if spec is None or spec.loader is None:
                         logger.warning("Failed to create module spec", extra={"file_path": str(file_path)})
@@ -126,15 +120,10 @@ def auto_include_routers(api: FastAPI, prefix: str, directory: str):
                     module = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(module)
 
-                    # 检查模块中是否存在router属性且是APIRouter实例
                     router = getattr(module, "router", None)
                     if isinstance(router, APIRouter):
-                        api.include_router(router, prefix=prefix)
-                        router_count += 1
-                        logger.debug("Router registered successfully", extra={
-                            "module_name": module_name,
-                            "prefix": prefix
-                        })
+                        routers.append(router)
+                        logger.debug("Router loaded successfully", extra={"module_name": module_name})
                     else:
                         logger.debug("No valid router found in module", extra={"module_name": module_name})
 
@@ -145,8 +134,36 @@ def auto_include_routers(api: FastAPI, prefix: str, directory: str):
                         "error": str(e)
                     }, exc_info=True)
 
+    return routers
+
+
+def auto_include_routers(api: FastAPI, prefix: str | list[str], directory: str):
+    """
+    自动扫描指定目录下的所有模块并注册路由
+
+    :param api: FastAPI 实例
+    :param prefix: 路由前缀，或一组前缀（同一套路由挂多次）
+    :param directory: 要扫描的目录路径
+    """
+    prefixes = [prefix] if isinstance(prefix, str) else list(prefix)
+    logger.info("Starting automatic router registration", extra={
+        "prefix": prefixes,
+        "directory": directory
+    })
+
+    routers = _load_controller_routers(directory)
+    schema_prefix = "/api" if "/api" in prefixes else prefixes[0]
+
+    for mounted in prefixes:
+        for router in routers:
+            api.include_router(
+                router,
+                prefix=mounted,
+                include_in_schema=(mounted == schema_prefix),
+            )
+
     logger.info("Automatic router registration completed", extra={
-        "prefix": prefix,
+        "prefix": prefixes,
         "directory": directory,
-        "routers_registered": router_count
+        "routers_registered": len(routers)
     })
