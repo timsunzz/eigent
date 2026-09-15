@@ -30,6 +30,14 @@ class User(AbstractModel, DefaultTimes, table=True):
     inviter_user_id: int | None = Field(default=None, foreign_key="user.id", description="Inviter user ID")
     status: Status = Field(default=Status.Normal.value, sa_column=Column(ChoiceType(Status, SmallInteger())))
 
+    def refresh_credits_on_active(self, session=None) -> None:
+        """Hook used by GET /user and /user/current_credits.
+
+        Cloud billing can grant daily/monthly credits here. Self-hosted
+        deployments have no grant schedule, so this must not raise.
+        """
+        return
+
 
 class UserProfile(BaseModel):
     fullname: str = ""
